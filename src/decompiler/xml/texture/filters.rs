@@ -1,6 +1,6 @@
 use super::super::{
     constants::{FILTER_LAYER_UUID, FILTER_SELECTOR_UUID},
-    grid::{empty_shared, reference, start_shared},
+    grid::{empty_shared, reference, start_shared, start_shared_with},
     plan::{FilterGlobals, PagePlan, ProjectPlan, RefId},
     writer::{XmlWriter, attr},
 };
@@ -112,7 +112,12 @@ pub(super) fn write_page(
 
 fn write_selector(xml: &mut XmlWriter, project: &ProjectPlan, page: &PagePlan) {
     let ids = &project.filters.value_ids;
-    start_shared(xml, "FilterInstance", page.filter_instances[0]);
+    start_shared_with(
+        xml,
+        "FilterInstance",
+        page.filter_instances[0],
+        vec![attr("filterName", "CLayerSelector")],
+    );
     reference(
         xml,
         "StaticFilterDefGuid",
@@ -168,7 +173,12 @@ fn env_connector(xml: &mut XmlWriter, key: RefId, env: RefId) {
 
 fn write_layer_filter(xml: &mut XmlWriter, project: &ProjectPlan, page: &PagePlan) {
     let ids = &project.filters.value_ids;
-    start_shared(xml, "FilterInstance", page.filter_instances[1]);
+    start_shared_with(
+        xml,
+        "FilterInstance",
+        page.filter_instances[1],
+        vec![attr("filterName", "CLayerFilter")],
+    );
     reference(
         xml,
         "StaticFilterDefGuid",
