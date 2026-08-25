@@ -94,7 +94,7 @@ impl RotationDeformerKeyform {
         self.angle_degrees
     }
 
-    /// Returns the keyed origin or translation.
+    /// Returns the keyed origin in the parent deformer coordinate system.
     pub fn origin(&self) -> [f32; 2] {
         self.origin
     }

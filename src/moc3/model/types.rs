@@ -68,12 +68,12 @@ impl Canvas {
         self.pixels_per_unit
     }
 
-    /// Returns the model-space canvas origin.
+    /// Returns the canvas origin in pixels.
     pub fn origin(&self) -> [f32; 2] {
         self.origin
     }
 
-    /// Returns the model-space canvas width and height.
+    /// Returns the canvas width and height in pixels.
     pub fn size(&self) -> [f32; 2] {
         self.size
     }
@@ -208,7 +208,7 @@ pub struct ArtMeshKeyform {
 }
 
 impl ArtMeshKeyform {
-    /// Returns the keyed model-space vertex positions.
+    /// Returns keyed positions in the parent deformer coordinate system.
     pub fn positions(&self) -> &[[f32; 2]] {
         &self.positions
     }
