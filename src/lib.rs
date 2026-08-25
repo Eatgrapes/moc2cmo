@@ -2,3 +2,8 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+mod error;
+pub mod moc3;
+
+pub use error::{Error, Result};

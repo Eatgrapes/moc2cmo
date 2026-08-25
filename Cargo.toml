@@ -10,3 +10,5 @@ keywords = ["live2d", "cubism", "moc3", "cmo3", "decompiler"]
 categories = ["parser-implementations", "multimedia"]
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
