@@ -102,9 +102,9 @@ fn write_texture_input(xml: &mut XmlWriter, plan: &MeshPlan, page: &PagePlan) {
     xml.end("carray_list");
     reference(
         xml,
-        "CTextureInput_TextureAtlasRegion",
+        "CTextureInput_ModelImage",
         "currentTextureInputData",
-        plan.texture_atlas_input,
+        plan.texture_input,
     );
     xml.end("CTextureInputExtension");
 }
@@ -219,7 +219,7 @@ fn write_mesh_source(
     );
     xml.empty(
         "TextureState",
-        &[attr("xs.n", "textureState"), attr("v", "TEXTURE_ATLAS")],
+        &[attr("xs.n", "textureState"), attr("v", "MODEL_IMAGE")],
     );
     xml.empty("s", &[attr("xs.n", "userData")]);
     xml.end("CArtMeshSource");
