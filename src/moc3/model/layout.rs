@@ -11,9 +11,14 @@ const OFFSET_TABLE_END: usize = OFFSET_TABLE_START + OFFSET_COUNT * 4;
 #[derive(Default)]
 pub(super) struct Counts {
     pub(super) parts: usize,
+    pub(super) deformers: usize,
+    pub(super) warp_deformers: usize,
+    pub(super) rotation_deformers: usize,
     pub(super) art_meshes: usize,
     pub(super) parameters: usize,
     pub(super) part_keyforms: usize,
+    pub(super) warp_deformer_keyforms: usize,
+    pub(super) rotation_deformer_keyforms: usize,
     pub(super) art_mesh_keyforms: usize,
     pub(super) keyform_positions: usize,
     pub(super) parameter_binding_indices: usize,
@@ -23,6 +28,9 @@ pub(super) struct Counts {
     pub(super) uvs: usize,
     pub(super) position_indices: usize,
     pub(super) drawable_masks: usize,
+    pub(super) glues: usize,
+    pub(super) glue_vertices: usize,
+    pub(super) glue_keyforms: usize,
     pub(super) keyform_multiply_colors: usize,
     pub(super) keyform_screen_colors: usize,
 }
@@ -79,9 +87,14 @@ pub(super) fn parse_counts(
     };
     Ok(Counts {
         parts: count(0, "part")?,
+        deformers: count(1, "deformer")?,
+        warp_deformers: count(2, "warp deformer")?,
+        rotation_deformers: count(3, "rotation deformer")?,
         art_meshes: count(4, "art mesh")?,
         parameters: count(5, "parameter")?,
         part_keyforms: count(6, "part keyform")?,
+        warp_deformer_keyforms: count(7, "warp deformer keyform")?,
+        rotation_deformer_keyforms: count(8, "rotation deformer keyform")?,
         art_mesh_keyforms: count(9, "art mesh keyform")?,
         keyform_positions: count(10, "keyform position")?,
         parameter_binding_indices: count(11, "parameter binding index")?,
@@ -91,6 +104,9 @@ pub(super) fn parse_counts(
         uvs: count(15, "uv")?,
         position_indices: count(16, "position index")?,
         drawable_masks: count(17, "drawable mask")?,
+        glues: count(20, "glue")?,
+        glue_vertices: count(21, "glue vertex")?,
+        glue_keyforms: count(22, "glue keyform")?,
         keyform_multiply_colors: count(23, "multiply color")?,
         keyform_screen_colors: count(24, "screen color")?,
     })
@@ -178,6 +194,29 @@ pub(super) fn read_f32(
     count: usize,
 ) -> Result<Vec<f32>> {
     reader.section_f32(required_offset(offsets, slot, count)?, count)
+}
+
+pub(super) fn read_f32_or(
+    reader: &Reader<'_>,
+    offsets: &[usize; OFFSET_COUNT],
+    slot: usize,
+    count: usize,
+    default: f32,
+) -> Result<Vec<f32>> {
+    if count == 0 || offsets[slot] == 0 {
+        Ok(vec![default; count])
+    } else {
+        reader.section_f32(offsets[slot], count)
+    }
+}
+
+pub(super) fn read_u16(
+    reader: &Reader<'_>,
+    offsets: &[usize; OFFSET_COUNT],
+    slot: usize,
+    count: usize,
+) -> Result<Vec<u16>> {
+    reader.section_u16(required_offset(offsets, slot, count)?, count)
 }
 
 pub(super) fn read_u8(

@@ -1,5 +1,7 @@
 mod art_mesh;
 mod bindings;
+mod deformer;
+mod glue;
 mod layout;
 mod parts;
 mod types;
@@ -11,6 +13,8 @@ use crate::Result;
 use self::{
     art_mesh::parse_art_meshes,
     bindings::parse_bindings,
+    deformer::parse_deformers,
+    glue::parse_glues,
     layout::{
         parse_canvas, parse_counts, parse_header, parse_ids, parse_offsets, parse_parameters,
     },
@@ -18,6 +22,10 @@ use self::{
 };
 use super::reader::Reader;
 
+pub use deformer::{
+    Deformer, RotationDeformer, RotationDeformerKeyform, WarpDeformer, WarpDeformerKeyform,
+};
+pub use glue::{Glue, GlueVertex};
 pub use types::{
     ArtMesh, ArtMeshKeyform, BindingBand, Canvas, Endianness, Moc3Version, Parameter,
     ParameterBinding, Part, PartKeyform,
@@ -32,7 +40,9 @@ pub struct Moc3Model {
     parameters: Vec<Parameter>,
     binding_bands: Vec<BindingBand>,
     parts: Vec<Part>,
+    deformers: Vec<Deformer>,
     art_meshes: Vec<ArtMesh>,
+    glues: Vec<Glue>,
 }
 
 impl Moc3Model {
@@ -54,7 +64,9 @@ impl Moc3Model {
             parameters: parse_parameters(&reader, &offsets, parameter_ids)?,
             binding_bands: parse_bindings(&reader, &offsets, &counts)?,
             parts: parse_parts(&reader, &offsets, part_ids, &counts)?,
+            deformers: parse_deformers(&reader, &offsets, &counts)?,
             art_meshes: parse_art_meshes(&reader, &offsets, art_mesh_ids, &counts)?,
+            glues: parse_glues(&reader, &offsets, &counts)?,
         })
     }
 
@@ -88,8 +100,18 @@ impl Moc3Model {
         &self.parts
     }
 
+    /// Returns the recovered warp and rotation deformers.
+    pub fn deformers(&self) -> &[Deformer] {
+        &self.deformers
+    }
+
     /// Returns the recovered ArtMeshes.
     pub fn art_meshes(&self) -> &[ArtMesh] {
         &self.art_meshes
+    }
+
+    /// Returns the recovered glue constraints.
+    pub fn glues(&self) -> &[Glue] {
+        &self.glues
     }
 }

@@ -31,6 +31,14 @@ impl<'a> Reader<'a> {
         })
     }
 
+    pub(super) fn u16(&self, offset: usize) -> Result<u16> {
+        let raw = self.array(offset)?;
+        Ok(match self.endianness {
+            Endianness::Little => u16::from_le_bytes(raw),
+            Endianness::Big => u16::from_be_bytes(raw),
+        })
+    }
+
     pub(super) fn i32(&self, offset: usize) -> Result<i32> {
         let raw = self.array(offset)?;
         Ok(match self.endianness {
@@ -57,6 +65,10 @@ impl<'a> Reader<'a> {
 
     pub(super) fn section_i16(&self, offset: usize, count: usize) -> Result<Vec<i16>> {
         self.section(offset, count, 2, Self::i16)
+    }
+
+    pub(super) fn section_u16(&self, offset: usize, count: usize) -> Result<Vec<u16>> {
+        self.section(offset, count, 2, Self::u16)
     }
 
     pub(super) fn section_i32(&self, offset: usize, count: usize) -> Result<Vec<i32>> {

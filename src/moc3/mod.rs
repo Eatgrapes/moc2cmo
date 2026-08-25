@@ -4,6 +4,7 @@ mod model;
 mod reader;
 
 pub use model::{
-    ArtMesh, ArtMeshKeyform, BindingBand, Canvas, Endianness, Moc3Model, Moc3Version, Parameter,
-    ParameterBinding, Part, PartKeyform,
+    ArtMesh, ArtMeshKeyform, BindingBand, Canvas, Deformer, Endianness, Glue, GlueVertex,
+    Moc3Model, Moc3Version, Parameter, ParameterBinding, Part, PartKeyform, RotationDeformer,
+    RotationDeformerKeyform, WarpDeformer, WarpDeformerKeyform,
 };
