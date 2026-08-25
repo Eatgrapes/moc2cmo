@@ -1,3 +1,5 @@
+mod atlas;
+mod cache;
 mod filters;
 mod layers;
 mod model_image;
@@ -82,6 +84,7 @@ fn write_page(
     );
     xml.end("CImageResource");
 
+    atlas::write(xml, page, texture, index);
     layers::write_layer(xml, project, page, texture, index);
     filters::write_page(xml, project, page, index);
     write_texture(xml, page, index);
@@ -116,7 +119,7 @@ fn write_texture(xml: &mut XmlWriter, page: &PagePlan, index: usize) {
         page.image_resource,
     );
     affine(xml, "transformImageResource01toLogical01");
-    xml.text("i", &[attr("xs.n", "mipmapLevel")], "1");
+    xml.text("i", &[attr("xs.n", "mipmapLevel")], "64");
     xml.text("b", &[attr("xs.n", "isPremultiplied")], "true");
     xml.end("GTexture2D");
 }

@@ -135,11 +135,22 @@ fn write_texture_manager(xml: &mut XmlWriter, plan: &ProjectPlan) {
     );
     reference_without_name(xml, "CModelImageGroup", plan.image_group);
     xml.end("carray_list");
-    xml.empty(
+    xml.start(
         "carray_list",
-        &[attr("xs.n", "_textureAtlases"), attr("count", 0)],
+        &[
+            attr("xs.n", "_textureAtlases"),
+            attr("count", plan.pages.len()),
+        ],
     );
-    xml.text("b", &[attr("xs.n", "isTextureInputModelImageMode")], "true");
+    for page in &plan.pages {
+        reference_without_name(xml, "CTextureAtlas", page.texture_atlas);
+    }
+    xml.end("carray_list");
+    xml.text(
+        "b",
+        &[attr("xs.n", "isTextureInputModelImageMode")],
+        "false",
+    );
     xml.text("i", &[attr("xs.n", "previewReductionRatio")], "1");
     xml.empty(
         "carray_list",

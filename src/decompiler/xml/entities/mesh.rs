@@ -61,6 +61,29 @@ fn write_texture_input(xml: &mut XmlWriter, plan: &MeshPlan, page: &PagePlan) {
     );
     xml.end("CTextureInput_ModelImage");
 
+    start_shared(
+        xml,
+        "CTextureInput_TextureAtlasRegion",
+        plan.texture_atlas_input,
+    );
+    xml.start("ACTextureInput", &[attr("xs.n", "super")]);
+    affine(xml, "optionalTransformOnCanvas");
+    reference(
+        xml,
+        "CTextureInputExtension",
+        "_owner",
+        plan.texture_extension,
+    );
+    xml.end("ACTextureInput");
+    reference(
+        xml,
+        "CTextureAtlasGuid",
+        "textureAtlasGuid",
+        page.texture_atlas_guid,
+    );
+    affine(xml, "inputImageLocalToCanvasTransform");
+    xml.end("CTextureInput_TextureAtlasRegion");
+
     start_shared(xml, "CTextureInputExtension", plan.texture_extension);
     xml.start("ACExtension", &[attr("xs.n", "super")]);
     reference(xml, "CExtensionGuid", "guid", plan.texture_extension_guid);
@@ -68,15 +91,20 @@ fn write_texture_input(xml: &mut XmlWriter, plan: &MeshPlan, page: &PagePlan) {
     xml.end("ACExtension");
     xml.start(
         "carray_list",
-        &[attr("xs.n", "_textureInputs"), attr("count", 1)],
+        &[attr("xs.n", "_textureInputs"), attr("count", 2)],
     );
     reference_without_name(xml, "CTextureInput_ModelImage", plan.texture_input);
+    reference_without_name(
+        xml,
+        "CTextureInput_TextureAtlasRegion",
+        plan.texture_atlas_input,
+    );
     xml.end("carray_list");
     reference(
         xml,
-        "CTextureInput_ModelImage",
+        "CTextureInput_TextureAtlasRegion",
         "currentTextureInputData",
-        plan.texture_input,
+        plan.texture_atlas_input,
     );
     xml.end("CTextureInputExtension");
 }
@@ -157,7 +185,7 @@ fn write_mesh_source(
         ],
         &indices,
     );
-    write_keyforms(xml, project, plan, mesh);
+    write_keyforms(xml, project, model, plan, mesh);
     xml.text(
         "float-array",
         &[
@@ -191,7 +219,7 @@ fn write_mesh_source(
     );
     xml.empty(
         "TextureState",
-        &[attr("xs.n", "textureState"), attr("v", "MODEL_IMAGE")],
+        &[attr("xs.n", "textureState"), attr("v", "TEXTURE_ATLAS")],
     );
     xml.empty("s", &[attr("xs.n", "userData")]);
     xml.end("CArtMeshSource");
@@ -287,7 +315,14 @@ fn write_generator_extension(xml: &mut XmlWriter, plan: &MeshPlan) {
     xml.end("CMeshGeneratorExtension");
 }
 
-fn write_keyforms(xml: &mut XmlWriter, project: &ProjectPlan, plan: &MeshPlan, mesh: &ArtMesh) {
+fn write_keyforms(
+    xml: &mut XmlWriter,
+    project: &ProjectPlan,
+    model: &Moc3Model,
+    plan: &MeshPlan,
+    mesh: &ArtMesh,
+) {
+    let is_canvas = mesh.parent_deformer_index().is_none();
     xml.start(
         "carray_list",
         &[
@@ -323,13 +358,18 @@ fn write_keyforms(xml: &mut XmlWriter, project: &ProjectPlan, plan: &MeshPlan, m
             "screenColor",
             keyform.map_or([0.0; 3], |value| value.screen_color()),
         );
-        reference(xml, "CoordType", "coordType", project.coord_type);
+        reference(
+            xml,
+            "CoordType",
+            "coordType",
+            super::common::form_coord_type(project, is_canvas),
+        );
         xml.end("ACDrawableForm");
         let positions = keyform
             .map(|value| value.positions())
             .unwrap_or(&[])
             .iter()
-            .flat_map(|position| position.iter().copied());
+            .flat_map(|position| super::common::form_position(model, *position, is_canvas));
         xml.text(
             "float-array",
             &[
@@ -347,14 +387,14 @@ fn write_keyforms(xml: &mut XmlWriter, project: &ProjectPlan, plan: &MeshPlan, m
 }
 
 fn editable_positions(model: &Moc3Model, mesh: &ArtMesh) -> Vec<f32> {
-    let scale = model.canvas().pixels_per_unit().abs().max(1.0);
+    let is_canvas = mesh.parent_deformer_index().is_none();
     mesh.keyforms()
         .first()
         .map(|keyform| {
             keyform
                 .positions()
                 .iter()
-                .flat_map(|position| position.iter().map(|value| value * scale))
+                .flat_map(|position| super::common::form_position(model, *position, is_canvas))
                 .collect()
         })
         .unwrap_or_else(|| vec![0.0; mesh.uvs().len() * 2])

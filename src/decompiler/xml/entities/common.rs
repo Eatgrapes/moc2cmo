@@ -35,6 +35,9 @@ pub(super) fn write_identifiers(xml: &mut XmlWriter, plan: &ProjectPlan, model: 
     start_shared(xml, "CoordType", plan.coord_type);
     xml.text("s", &[attr("xs.n", "coordName")], "DeformerLocal");
     xml.end("CoordType");
+    start_shared(xml, "CoordType", plan.canvas_coord_type);
+    xml.text("s", &[attr("xs.n", "coordName")], "Canvas");
+    xml.end("CoordType");
 
     start_shared(xml, "CBlend_Normal", plan.blend_normal);
     xml.start("ACBlend", &[attr("xs.n", "super")]);
@@ -163,6 +166,26 @@ pub(super) fn color(xml: &mut XmlWriter, name: &str, rgb: [f32; 3]) {
             attr("alpha", "1.0"),
         ],
     );
+}
+
+pub(super) fn form_position(model: &Moc3Model, position: [f32; 2], is_canvas: bool) -> [f32; 2] {
+    if !is_canvas {
+        return position;
+    }
+    let scale = model.canvas().pixels_per_unit();
+    let origin = model.canvas().origin();
+    [
+        position[0] * scale + origin[0],
+        position[1] * scale + origin[1],
+    ]
+}
+
+pub(super) fn form_coord_type(plan: &ProjectPlan, is_canvas: bool) -> RefId {
+    if is_canvas {
+        plan.canvas_coord_type
+    } else {
+        plan.coord_type
+    }
 }
 
 fn write_form_guids(xml: &mut XmlWriter, grid: &GridPlan, owner: &str) {

@@ -31,6 +31,7 @@ pub(super) struct ProjectPlan {
     pub(super) model_guid: RefId,
     pub(super) root_deformer_guid: RefId,
     pub(super) coord_type: RefId,
+    pub(super) canvas_coord_type: RefId,
     pub(super) blend_normal: RefId,
     pub(super) layered_image_guid: RefId,
     pub(super) layered_image: RefId,
@@ -67,6 +68,8 @@ pub(super) struct PagePlan {
     pub(super) filter_instances: [RefId; 2],
     pub(super) filter_output: RefId,
     pub(super) texture: RefId,
+    pub(super) texture_atlas_guid: RefId,
+    pub(super) texture_atlas: RefId,
 }
 
 pub(super) struct GridPlan {
@@ -97,6 +100,7 @@ pub(super) struct MeshPlan {
     pub(super) texture_extension_guid: RefId,
     pub(super) texture_extension: RefId,
     pub(super) texture_input: RefId,
+    pub(super) texture_atlas_input: RefId,
 }
 
 pub(super) struct GluePlan {
@@ -112,6 +116,7 @@ impl ProjectPlan {
         let model_guid = ids.id();
         let root_deformer_guid = ids.id();
         let coord_type = ids.id();
+        let canvas_coord_type = ids.id();
         let blend_normal = ids.id();
         let layered_image_guid = ids.id();
         let layered_image = ids.id();
@@ -138,6 +143,8 @@ impl ProjectPlan {
                 filter_instances: [ids.id(), ids.id()],
                 filter_output: ids.id(),
                 texture: ids.id(),
+                texture_atlas_guid: ids.id(),
+                texture_atlas: ids.id(),
             })
             .collect();
         let root_part = part_plan(&mut ids, 0, 1);
@@ -188,6 +195,7 @@ impl ProjectPlan {
                 texture_extension_guid: ids.id(),
                 texture_extension: ids.id(),
                 texture_input: ids.id(),
+                texture_atlas_input: ids.id(),
             })
             .collect();
         let glues = model
@@ -210,6 +218,7 @@ impl ProjectPlan {
             model_guid,
             root_deformer_guid,
             coord_type,
+            canvas_coord_type,
             blend_normal,
             layered_image_guid,
             layered_image,

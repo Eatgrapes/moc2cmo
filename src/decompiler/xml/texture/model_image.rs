@@ -6,7 +6,7 @@ use super::{
         plan::{PagePlan, ProjectPlan},
         writer::{XmlWriter, attr},
     },
-    affine,
+    affine, cache,
 };
 
 pub(super) fn write_group(xml: &mut XmlWriter, plan: &ProjectPlan, textures: &[Texture]) {
@@ -94,41 +94,7 @@ fn write_model_image(
     );
     reference_without_name(xml, "CLayeredImageGuid", plan.layered_image_guid);
     xml.end("carray_list");
-    xml.start("CCachedImageManager", &[attr("xs.n", "cachedImageManager")]);
-    xml.empty(
-        "CachedImageType",
-        &[attr("xs.n", "defaultCacheType"), attr("v", "SCALE_1")],
-    );
-    reference(xml, "CImageResource", "rawImage", page.image_resource);
-    xml.start(
-        "array_list",
-        &[attr("xs.n", "cachedImages"), attr("count", 1)],
-    );
-    xml.start("CCachedImage", &[]);
-    reference(
-        xml,
-        "CImageResource",
-        "_cachedImageResource",
-        page.image_resource,
-    );
-    xml.text("b", &[attr("xs.n", "isSharedImage")], "true");
-    xml.empty(
-        "CSize",
-        &[
-            attr("xs.n", "rawImageSize"),
-            attr("width", texture.width()),
-            attr("height", texture.height()),
-        ],
-    );
-    xml.text("i", &[attr("xs.n", "reductionRatio")], "1");
-    xml.text("i", &[attr("xs.n", "mipmapLevel")], "1");
-    xml.text("b", &[attr("xs.n", "hasMargin")], "false");
-    xml.text("b", &[attr("xs.n", "isCleaned")], "false");
-    affine(xml, "transformRawImageToCachedImage");
-    xml.end("CCachedImage");
-    xml.end("array_list");
-    xml.text("i", &[attr("xs.n", "requiredMipmapLevel")], "1");
-    xml.end("CCachedImageManager");
+    cache::write_manager(xml, "cachedImageManager", page.image_resource, texture);
     xml.empty("s", &[attr("xs.n", "memo")]);
     xml.end("CModelImage");
 }

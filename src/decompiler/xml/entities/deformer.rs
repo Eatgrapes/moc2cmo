@@ -9,7 +9,9 @@ use super::{
         plan::{DeformerPlan, ProjectPlan},
         writer::{XmlWriter, attr},
     },
-    common::{color, start_parameter_controllable, write_form_header},
+    common::{
+        color, form_coord_type, form_position, start_parameter_controllable, write_form_header,
+    },
 };
 
 pub(super) fn write_deformers(
@@ -17,21 +19,35 @@ pub(super) fn write_deformers(
     plan: &ProjectPlan,
     model: &Moc3Model,
 ) -> Result<()> {
-    for (index, (deformer, deformer_plan)) in
-        model.deformers().iter().zip(&plan.deformers).enumerate()
-    {
-        write_grid(
-            xml,
-            &deformer_plan.grid,
-            model,
-            deformer.binding_band_index(),
-            &plan.parameters,
-            &format!("Deformer{index}"),
-        )?;
+    let mut warp_index = 0;
+    let mut rotation_index = 0;
+    for (deformer, deformer_plan) in model.deformers().iter().zip(&plan.deformers) {
         match deformer {
-            Deformer::Warp(warp) => write_warp(xml, plan, deformer_plan, warp, index),
+            Deformer::Warp(warp) => {
+                let name = format!("Warp{warp_index}");
+                write_grid(
+                    xml,
+                    &deformer_plan.grid,
+                    model,
+                    deformer.binding_band_index(),
+                    &plan.parameters,
+                    &name,
+                )?;
+                write_warp(xml, plan, model, deformer_plan, warp, &name);
+                warp_index += 1;
+            }
             Deformer::Rotation(rotation) => {
-                write_rotation(xml, plan, deformer_plan, rotation, index)
+                let name = format!("Rotation{rotation_index}");
+                write_grid(
+                    xml,
+                    &deformer_plan.grid,
+                    model,
+                    deformer.binding_band_index(),
+                    &plan.parameters,
+                    &name,
+                )?;
+                write_rotation(xml, plan, model, deformer_plan, rotation, &name);
+                rotation_index += 1;
             }
         }
     }
@@ -41,13 +57,14 @@ pub(super) fn write_deformers(
 fn write_warp(
     xml: &mut XmlWriter,
     project: &ProjectPlan,
+    model: &Moc3Model,
     plan: &DeformerPlan,
     deformer: &WarpDeformer,
-    index: usize,
+    name: &str,
 ) {
-    let name = format!("Warp{index}");
+    let is_canvas = deformer.parent_deformer_index().is_none();
     start_shared(xml, "CWarpDeformerSource", plan.source);
-    start_deformer_source(xml, project, plan, deformer.parent_deformer_index(), &name);
+    start_deformer_source(xml, project, plan, deformer.parent_deformer_index(), name);
     xml.text("i", &[attr("xs.n", "col")], &deformer.columns().to_string());
     xml.text("i", &[attr("xs.n", "row")], &deformer.rows().to_string());
     xml.text("b", &[attr("xs.n", "isQuadTransform")], "false");
@@ -78,13 +95,18 @@ fn write_warp(
             "screenColor",
             keyform.map_or([0.0; 3], |value| value.screen_color()),
         );
-        reference(xml, "CoordType", "coordType", project.coord_type);
+        reference(
+            xml,
+            "CoordType",
+            "coordType",
+            form_coord_type(project, is_canvas),
+        );
         xml.end("ACDeformerForm");
         let positions = keyform
             .map(|value| value.positions())
             .unwrap_or(&[])
             .iter()
-            .flat_map(|position| position.iter().copied());
+            .flat_map(|position| form_position(model, *position, is_canvas));
         xml.text(
             "float-array",
             &[
@@ -105,13 +127,14 @@ fn write_warp(
 fn write_rotation(
     xml: &mut XmlWriter,
     project: &ProjectPlan,
+    model: &Moc3Model,
     plan: &DeformerPlan,
     deformer: &RotationDeformer,
-    index: usize,
+    name: &str,
 ) {
-    let name = format!("Rotation{index}");
+    let is_canvas = deformer.parent_deformer_index().is_none();
     start_shared(xml, "CRotationDeformerSource", plan.source);
-    start_deformer_source(xml, project, plan, deformer.parent_deformer_index(), &name);
+    start_deformer_source(xml, project, plan, deformer.parent_deformer_index(), name);
     xml.text("b", &[attr("xs.n", "useBoneUi_testImpl")], "true");
     xml.start(
         "carray_list",
@@ -122,8 +145,18 @@ fn write_rotation(
     );
     for (form_index, form_guid) in plan.grid.forms.iter().copied().enumerate() {
         let keyform = deformer.keyforms().get(form_index);
-        let origin = keyform.map_or([0.0; 2], |value| value.origin());
+        let origin = form_position(
+            model,
+            keyform.map_or([0.0; 2], |value| value.origin()),
+            is_canvas,
+        );
         let reflected = keyform.map_or([false; 2], |value| value.reflected());
+        let scale = keyform.map_or(1.0, |value| value.scale())
+            * if is_canvas {
+                model.canvas().pixels_per_unit()
+            } else {
+                1.0
+            };
         xml.start(
             "CRotationDeformerForm",
             &[
@@ -133,7 +166,7 @@ fn write_rotation(
                 ),
                 attr("originX", float(origin[0])),
                 attr("originY", float(origin[1])),
-                attr("scale", float(keyform.map_or(1.0, |value| value.scale()))),
+                attr("scale", float(scale)),
                 attr("isReflectX", reflected[0]),
                 attr("isReflectY", reflected[1]),
             ],
@@ -155,7 +188,12 @@ fn write_rotation(
             "screenColor",
             keyform.map_or([0.0; 3], |value| value.screen_color()),
         );
-        reference(xml, "CoordType", "coordType", project.coord_type);
+        reference(
+            xml,
+            "CoordType",
+            "coordType",
+            form_coord_type(project, is_canvas),
+        );
         xml.end("ACDeformerForm");
         xml.end("CRotationDeformerForm");
     }
