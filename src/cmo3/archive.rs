@@ -1,6 +1,7 @@
-use std::io::Write;
+use std::io::{Cursor, Write};
 
-use flate2::{Compression as DeflateLevel, write::DeflateEncoder};
+use byteorder::{BigEndian, WriteBytesExt};
+use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 use crate::{Error, Result};
 
@@ -90,71 +91,17 @@ pub(super) fn encode_archive(entries: Vec<ArchiveEntry>, key: i32) -> Result<Vec
 }
 
 fn zip_contents(content: &[u8]) -> Result<Vec<u8>> {
-    const NAME: &[u8] = b"contents";
+    let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Deflated)
+        .compression_level(Some(1));
+    archive.start_file("contents", options).map_err(zip_error)?;
+    archive.write_all(content).map_err(zip_error)?;
+    archive.finish().map_err(zip_error).map(Cursor::into_inner)
+}
 
-    let mut encoder = DeflateEncoder::new(Vec::new(), DeflateLevel::fast());
-    encoder
-        .write_all(content)
-        .map_err(|error| Error::InvalidCmo3(format!("deflate failed: {error}")))?;
-    let compressed = encoder
-        .finish()
-        .map_err(|error| Error::InvalidCmo3(format!("deflate failed: {error}")))?;
-    let crc = crc32fast::hash(content);
-    let compressed_len = u32::try_from(compressed.len())
-        .map_err(|_| Error::InvalidCmo3("compressed main.xml is too large".into()))?;
-    let content_len = u32::try_from(content.len())
-        .map_err(|_| Error::InvalidCmo3("main.xml is too large".into()))?;
-    let name_len = u16::try_from(NAME.len()).expect("contents filename fits in u16");
-
-    let mut zip = Vec::with_capacity(compressed.len() + 128);
-    push_u32_le(&mut zip, 0x0403_4b50);
-    push_u16_le(&mut zip, 20);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 8);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 0);
-    push_u32_le(&mut zip, crc);
-    push_u32_le(&mut zip, compressed_len);
-    push_u32_le(&mut zip, content_len);
-    push_u16_le(&mut zip, name_len);
-    push_u16_le(&mut zip, 0);
-    zip.extend_from_slice(NAME);
-    zip.extend_from_slice(&compressed);
-
-    let central_offset = u32::try_from(zip.len())
-        .map_err(|_| Error::InvalidCmo3("ZIP offset is too large".into()))?;
-    push_u32_le(&mut zip, 0x0201_4b50);
-    push_u16_le(&mut zip, 20);
-    push_u16_le(&mut zip, 20);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 8);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 0);
-    push_u32_le(&mut zip, crc);
-    push_u32_le(&mut zip, compressed_len);
-    push_u32_le(&mut zip, content_len);
-    push_u16_le(&mut zip, name_len);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 0);
-    push_u32_le(&mut zip, 0);
-    push_u32_le(&mut zip, 0);
-    zip.extend_from_slice(NAME);
-
-    let central_size = u32::try_from(zip.len())
-        .ok()
-        .and_then(|end| end.checked_sub(central_offset))
-        .ok_or_else(|| Error::InvalidCmo3("ZIP directory size overflows".into()))?;
-    push_u32_le(&mut zip, 0x0605_4b50);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 0);
-    push_u16_le(&mut zip, 1);
-    push_u16_le(&mut zip, 1);
-    push_u32_le(&mut zip, central_size);
-    push_u32_le(&mut zip, central_offset);
-    push_u16_le(&mut zip, 0);
-    Ok(zip)
+fn zip_error(error: impl std::fmt::Display) -> Error {
+    Error::InvalidCmo3(format!("ZIP encoding failed: {error}"))
 }
 
 struct CaffWriter {
@@ -176,17 +123,17 @@ impl CaffWriter {
 
     fn i16(&mut self, value: i16, key: i32) {
         let encoded = value as u16 ^ key as u16;
-        self.bytes.extend_from_slice(&encoded.to_be_bytes());
+        self.bytes.write_u16::<BigEndian>(encoded).unwrap();
     }
 
     fn i32(&mut self, value: i32, key: i32) {
         let encoded = value as u32 ^ key as u32;
-        self.bytes.extend_from_slice(&encoded.to_be_bytes());
+        self.bytes.write_u32::<BigEndian>(encoded).unwrap();
     }
 
     fn i64(&mut self, value: i64, key: i32) {
         let encoded = value as u64 ^ int64_mask(key);
-        self.bytes.extend_from_slice(&encoded.to_be_bytes());
+        self.bytes.write_u64::<BigEndian>(encoded).unwrap();
     }
 
     fn bytes(&mut self, bytes: &[u8], key: i32) {
@@ -247,12 +194,4 @@ fn int64_mask(key: i32) -> u64 {
         let key = u64::from(key as u32);
         (key << 32) | key
     }
-}
-
-fn push_u16_le(target: &mut Vec<u8>, value: u16) {
-    target.extend_from_slice(&value.to_le_bytes());
-}
-
-fn push_u32_le(target: &mut Vec<u8>, value: u32) {
-    target.extend_from_slice(&value.to_le_bytes());
 }

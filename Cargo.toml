@@ -10,7 +10,7 @@ keywords = ["live2d", "cubism", "moc3", "cmo3", "decompiler"]
 categories = ["parser-implementations", "multimedia"]
 
 [dependencies]
-crc32fast = "1"
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+byteorder = "1"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
