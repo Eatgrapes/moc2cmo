@@ -5,6 +5,7 @@ use crate::{
 
 use super::{
     super::{
+        super::geometry::rotation_ancestor_flags,
         grid::{float, float_array, reference, start_shared, write_grid},
         plan::{DeformerPlan, ProjectPlan},
         writer::{XmlWriter, attr},
@@ -19,9 +20,12 @@ pub(super) fn write_deformers(
     plan: &ProjectPlan,
     model: &Moc3Model,
 ) -> Result<()> {
+    let rotation_ancestors = rotation_ancestor_flags(model)?;
     let mut warp_index = 0;
     let mut rotation_index = 0;
-    for (deformer, deformer_plan) in model.deformers().iter().zip(&plan.deformers) {
+    for (index, (deformer, deformer_plan)) in
+        model.deformers().iter().zip(&plan.deformers).enumerate()
+    {
         match deformer {
             Deformer::Warp(warp) => {
                 let name = format!("Warp{warp_index}");
@@ -46,7 +50,25 @@ pub(super) fn write_deformers(
                     &plan.parameters,
                     &name,
                 )?;
-                write_rotation(xml, plan, model, deformer_plan, rotation, &name);
+                let scale_factor = if rotation_ancestors[index] {
+                    1.0
+                } else {
+                    let pixels_per_unit = model.canvas().pixels_per_unit();
+                    if pixels_per_unit == 0.0 {
+                        1.0
+                    } else {
+                        pixels_per_unit
+                    }
+                };
+                write_rotation(
+                    xml,
+                    plan,
+                    model,
+                    deformer_plan,
+                    rotation,
+                    &name,
+                    scale_factor,
+                );
                 rotation_index += 1;
             }
         }
@@ -131,6 +153,7 @@ fn write_rotation(
     plan: &DeformerPlan,
     deformer: &RotationDeformer,
     name: &str,
+    scale_factor: f32,
 ) {
     let is_canvas = deformer.parent_deformer_index().is_none();
     start_shared(xml, "CRotationDeformerSource", plan.source);
@@ -151,12 +174,7 @@ fn write_rotation(
             is_canvas,
         );
         let reflected = keyform.map_or([false; 2], |value| value.reflected());
-        let scale = keyform.map_or(1.0, |value| value.scale())
-            * if is_canvas {
-                model.canvas().pixels_per_unit()
-            } else {
-                1.0
-            };
+        let scale = keyform.map_or(1.0, |value| value.scale()) * scale_factor;
         xml.start(
             "CRotationDeformerForm",
             &[

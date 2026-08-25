@@ -7,9 +7,10 @@ use crate::{
 
 use super::{
     super::{
+        super::geometry::{EvaluatedGeometry, MeshGeometry},
         grid::{float, float_array, reference, reference_without_name, start_shared, write_grid},
         plan::{MeshPlan, PagePlan, ProjectPlan},
-        texture::affine,
+        texture::{affine, affine_value},
         writer::{XmlWriter, attr},
     },
     common::{color, start_parameter_controllable, write_form_header},
@@ -19,8 +20,9 @@ pub(super) fn write_meshes(
     xml: &mut XmlWriter,
     plan: &ProjectPlan,
     model: &Moc3Model,
+    geometry: &EvaluatedGeometry,
 ) -> Result<()> {
-    for (mesh, mesh_plan) in model.art_meshes().iter().zip(&plan.meshes) {
+    for (index, (mesh, mesh_plan)) in model.art_meshes().iter().zip(&plan.meshes).enumerate() {
         let page = plan.pages.get(mesh.texture_index()).ok_or_else(|| {
             Error::InvalidCmo3(format!(
                 "ArtMesh {:?} references missing texture {}",
@@ -28,7 +30,8 @@ pub(super) fn write_meshes(
                 mesh.texture_index()
             ))
         })?;
-        write_texture_input(xml, mesh_plan, page);
+        let mesh_geometry = geometry.mesh(index)?;
+        write_texture_input(xml, mesh_plan, page, mesh_geometry);
         write_grid(
             xml,
             &mesh_plan.grid,
@@ -37,12 +40,17 @@ pub(super) fn write_meshes(
             &plan.parameters,
             mesh.id(),
         )?;
-        write_mesh_source(xml, plan, model, mesh_plan, mesh, page);
+        write_mesh_source(xml, plan, model, mesh_plan, mesh, page, mesh_geometry);
     }
     Ok(())
 }
 
-fn write_texture_input(xml: &mut XmlWriter, plan: &MeshPlan, page: &PagePlan) {
+fn write_texture_input(
+    xml: &mut XmlWriter,
+    plan: &MeshPlan,
+    page: &PagePlan,
+    geometry: &MeshGeometry,
+) {
     start_shared(xml, "CTextureInput_ModelImage", plan.texture_input);
     xml.start("ACTextureInput", &[attr("xs.n", "super")]);
     affine(xml, "optionalTransformOnCanvas");
@@ -81,7 +89,11 @@ fn write_texture_input(xml: &mut XmlWriter, plan: &MeshPlan, page: &PagePlan) {
         "textureAtlasGuid",
         page.texture_atlas_guid,
     );
-    affine(xml, "inputImageLocalToCanvasTransform");
+    affine_value(
+        xml,
+        "inputImageLocalToCanvasTransform",
+        geometry.atlas_to_canvas(),
+    );
     xml.end("CTextureInput_TextureAtlasRegion");
 
     start_shared(xml, "CTextureInputExtension", plan.texture_extension);
@@ -102,9 +114,9 @@ fn write_texture_input(xml: &mut XmlWriter, plan: &MeshPlan, page: &PagePlan) {
     xml.end("carray_list");
     reference(
         xml,
-        "CTextureInput_ModelImage",
+        "CTextureInput_TextureAtlasRegion",
         "currentTextureInputData",
-        plan.texture_input,
+        plan.texture_atlas_input,
     );
     xml.end("CTextureInputExtension");
 }
@@ -116,6 +128,7 @@ fn write_mesh_source(
     plan: &MeshPlan,
     mesh: &ArtMesh,
     page: &PagePlan,
+    geometry: &MeshGeometry,
 ) {
     let parent_part = mesh
         .parent_part_index()
@@ -125,7 +138,11 @@ fn write_mesh_source(
         .parent_deformer_index()
         .and_then(|index| project.deformers.get(index))
         .map_or(project.root_deformer_guid, |deformer| deformer.guid);
-    let editable_positions = editable_positions(model, mesh);
+    let editable_positions = geometry
+        .positions()
+        .iter()
+        .flat_map(|position| position.iter().copied())
+        .collect::<Vec<_>>();
     let edges = triangle_edges(mesh.triangle_indices());
 
     start_shared(xml, "CArtMeshSource", plan.source);
@@ -219,7 +236,7 @@ fn write_mesh_source(
     );
     xml.empty(
         "TextureState",
-        &[attr("xs.n", "textureState"), attr("v", "MODEL_IMAGE")],
+        &[attr("xs.n", "textureState"), attr("v", "TEXTURE_ATLAS")],
     );
     xml.empty("s", &[attr("xs.n", "userData")]);
     xml.end("CArtMeshSource");
@@ -384,20 +401,6 @@ fn write_keyforms(
         xml.end("CArtMeshForm");
     }
     xml.end("carray_list");
-}
-
-fn editable_positions(model: &Moc3Model, mesh: &ArtMesh) -> Vec<f32> {
-    let is_canvas = mesh.parent_deformer_index().is_none();
-    mesh.keyforms()
-        .first()
-        .map(|keyform| {
-            keyform
-                .positions()
-                .iter()
-                .flat_map(|position| super::common::form_position(model, *position, is_canvas))
-                .collect()
-        })
-        .unwrap_or_else(|| vec![0.0; mesh.uvs().len() * 2])
 }
 
 fn triangle_edges(indices: &[u16]) -> Vec<u16> {

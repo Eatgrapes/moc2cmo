@@ -13,7 +13,7 @@ use self::{
     plan::ProjectPlan,
     writer::{XmlWriter, attr},
 };
-use super::Texture;
+use super::{Texture, geometry::EvaluatedGeometry};
 
 pub(super) fn generate(
     model: &Moc3Model,
@@ -21,6 +21,7 @@ pub(super) fn generate(
     textures: &[Texture],
 ) -> Result<Vec<u8>> {
     let plan = ProjectPlan::new(model, textures.len());
+    let geometry = EvaluatedGeometry::evaluate(model, textures)?;
     let mut xml = XmlWriter::new();
     xml.declaration("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
     for (name, version) in VERSION_INSTRUCTIONS {
@@ -31,7 +32,7 @@ pub(super) fn generate(
     }
     xml.start("root", &[attr("fileFormatVersion", "402030000")]);
     xml.start("shared", &[]);
-    entities::write_shared(&mut xml, &plan, model)?;
+    entities::write_shared(&mut xml, &plan, model, &geometry)?;
     texture::write_texture_shared(&mut xml, &plan, model, textures);
     xml.end("shared");
     xml.start("main", &[]);

@@ -6,7 +6,10 @@ mod model_image;
 
 use uuid::Uuid;
 
-use crate::{decompiler::Texture, moc3::Moc3Model};
+use crate::{
+    decompiler::{Texture, geometry::Affine2},
+    moc3::Moc3Model,
+};
 
 use super::{
     grid::{empty_shared, reference, start_shared, start_shared_with},
@@ -125,16 +128,20 @@ fn write_texture(xml: &mut XmlWriter, page: &PagePlan, index: usize) {
 }
 
 pub(super) fn affine(xml: &mut XmlWriter, name: &str) {
+    affine_value(xml, name, Affine2::default());
+}
+
+pub(super) fn affine_value(xml: &mut XmlWriter, name: &str, value: Affine2) {
     xml.empty(
         "CAffine",
         &[
             attr("xs.n", name),
-            attr("m00", "1.0"),
-            attr("m01", "0.0"),
-            attr("m02", "0.0"),
-            attr("m10", "0.0"),
-            attr("m11", "1.0"),
-            attr("m12", "0.0"),
+            attr("m00", super::grid::float(value.m00)),
+            attr("m01", super::grid::float(value.m01)),
+            attr("m02", super::grid::float(value.m02)),
+            attr("m10", super::grid::float(value.m10)),
+            attr("m11", super::grid::float(value.m11)),
+            attr("m12", super::grid::float(value.m12)),
         ],
     );
 }
