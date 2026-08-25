@@ -75,7 +75,7 @@ pub(super) const IMPORT_INSTRUCTIONS: &[&str] = &[
     "com.live2d.cubism.doc.model.parts.CPartSource",
     "com.live2d.cubism.doc.model.parts.CPartSourceSet",
     "com.live2d.cubism.doc.model.texture.CTextureManager",
-    "com.live2d.cubism.doc.model.texture.CTextureAtlas",
+    "com.live2d.cubism.doc.model.texture.textureAtlas.CTextureAtlas",
     "com.live2d.cubism.doc.model.texture.LayeredImageWrapper",
     "com.live2d.cubism.doc.model.texture.TextureImageGroup",
     "com.live2d.cubism.doc.model.texture.modelImage.CModelImage",
