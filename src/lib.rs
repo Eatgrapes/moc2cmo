@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod cmo3;
 mod error;
 pub mod moc3;
 

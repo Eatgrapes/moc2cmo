@@ -7,6 +7,10 @@ pub enum Error {
     #[error("invalid MOC3: {0}")]
     InvalidMoc3(String),
 
+    /// The CMO3 project could not be encoded.
+    #[error("invalid CMO3 project: {0}")]
+    InvalidCmo3(String),
+
     /// A filesystem operation failed.
     #[error("failed to access {path}: {source}")]
     Io {
