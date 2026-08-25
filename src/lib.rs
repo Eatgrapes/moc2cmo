@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod caff;
+pub mod can3;
 pub mod cmo3;
 mod decompiler;
 mod error;

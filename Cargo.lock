@@ -193,6 +193,7 @@ name = "moc2cmo"
 version = "1.0.0"
 dependencies = [
  "byteorder",
+ "flate2",
  "image",
  "quick-xml",
  "serde",

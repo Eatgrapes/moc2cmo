@@ -11,6 +11,14 @@ pub enum Error {
     #[error("invalid CMO3 project: {0}")]
     InvalidCmo3(String),
 
+    /// A CAN3 animation project could not be decoded or encoded.
+    #[error("invalid CAN3 project: {0}")]
+    InvalidCan3(String),
+
+    /// A Cubism CAFF archive could not be decoded or encoded.
+    #[error("invalid CAFF archive: {0}")]
+    InvalidCaff(String),
+
     /// A filesystem operation failed.
     #[error("failed to access {path}: {source}")]
     Io {

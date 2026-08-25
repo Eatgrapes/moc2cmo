@@ -12,6 +12,7 @@ categories = ["parser-implementations", "multimedia"]
 
 [dependencies]
 byteorder = "1"
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 quick-xml = "0.38"
 serde = { version = "1", features = ["derive"] }

@@ -3,34 +3,15 @@ use std::io::{Cursor, Write};
 use byteorder::{BigEndian, WriteBytesExt};
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
-use crate::{Error, Result};
+use crate::Result;
+
+use super::{ArchiveEntry, Compression, int64_mask, invalid};
 
 const MAGIC: &[u8; 4] = b"CAFF";
 const FORMAT_ID: &[u8; 4] = b"----";
 const NO_PREVIEW: u8 = 127;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(super) enum Compression {
-    Raw = 16,
-    Fast = 33,
-}
-
-pub(super) struct ArchiveEntry {
-    pub(super) path: String,
-    pub(super) tag: String,
-    pub(super) bytes: Vec<u8>,
-    pub(super) compression: Compression,
-}
-
-struct StoredEntry {
-    path: String,
-    tag: String,
-    bytes: Vec<u8>,
-    compression: Compression,
-    position_patch: usize,
-}
-
-pub(super) fn encode_archive(entries: Vec<ArchiveEntry>, key: i32) -> Result<Vec<u8>> {
+pub(crate) fn encode_archive(entries: Vec<ArchiveEntry>, key: i32) -> Result<Vec<u8>> {
     let mut entries = entries
         .into_iter()
         .map(|entry| {
@@ -65,16 +46,14 @@ pub(super) fn encode_archive(entries: Vec<ArchiveEntry>, key: i32) -> Result<Vec
     writer.i32(0, 0);
     writer.zeros(8);
 
-    let entry_count = i32::try_from(entries.len())
-        .map_err(|_| Error::InvalidCmo3("too many archive entries".into()))?;
+    let entry_count = i32::try_from(entries.len()).map_err(|_| invalid("too many entries"))?;
     writer.i32(entry_count, key);
     for entry in &mut entries {
         writer.string(&entry.path, key)?;
         writer.string(&entry.tag, key)?;
         entry.position_patch = writer.position();
         writer.i64(0, key);
-        let size = i32::try_from(entry.bytes.len())
-            .map_err(|_| Error::InvalidCmo3(format!("resource {:?} is too large", entry.path)))?;
+        let size = i32::try_from(entry.bytes.len()).map_err(|_| invalid("entry is too large"))?;
         writer.i32(size, key);
         writer.byte(1, key);
         writer.byte(entry.compression as u8, key);
@@ -90,6 +69,14 @@ pub(super) fn encode_archive(entries: Vec<ArchiveEntry>, key: i32) -> Result<Vec
     Ok(writer.finish())
 }
 
+struct StoredEntry {
+    path: String,
+    tag: String,
+    bytes: Vec<u8>,
+    compression: Compression,
+    position_patch: usize,
+}
+
 fn zip_contents(content: &[u8]) -> Result<Vec<u8>> {
     let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default()
@@ -100,8 +87,8 @@ fn zip_contents(content: &[u8]) -> Result<Vec<u8>> {
     archive.finish().map_err(zip_error).map(Cursor::into_inner)
 }
 
-fn zip_error(error: impl std::fmt::Display) -> Error {
-    Error::InvalidCmo3(format!("ZIP encoding failed: {error}"))
+fn zip_error(error: impl std::fmt::Display) -> crate::Error {
+    invalid(format!("ZIP encoding failed: {error}"))
 }
 
 struct CaffWriter {
@@ -153,7 +140,7 @@ impl CaffWriter {
 
     fn number(&mut self, value: usize, key: i32) -> Result<()> {
         if value >= 1 << 28 {
-            return Err(Error::InvalidCmo3("archive string is too long".into()));
+            return Err(invalid("archive string is too long"));
         }
         if value < 128 {
             self.byte(value as u8, key);
@@ -184,14 +171,5 @@ impl CaffWriter {
 
     fn finish(self) -> Vec<u8> {
         self.bytes
-    }
-}
-
-fn int64_mask(key: i32) -> u64 {
-    if key < 0 {
-        (u64::from(u32::MAX) << 32) | u64::from(key as u32)
-    } else {
-        let key = u64::from(key as u32);
-        (key << 32) | key
     }
 }

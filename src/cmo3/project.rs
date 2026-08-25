@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::{Error, Result};
 
-use super::archive::{ArchiveEntry, Compression, encode_archive};
+use crate::caff::{ArchiveEntry, Compression, encode_archive};
 
 /// A CMO3 project before it is encoded into a CAFF archive.
 #[derive(Debug, Clone, PartialEq, Eq)]
