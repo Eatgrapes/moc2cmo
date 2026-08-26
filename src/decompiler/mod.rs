@@ -212,7 +212,20 @@ pub fn decompile_model3_to_files(
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or("model.cmo3");
-    let can3 = Can3Project::from_model3(model_name, model_file_name, &motions, manifest.groups())?;
+    let mut can3 =
+        Can3Project::from_model3(model_name, model_file_name, &motions, manifest.groups())?;
+    for entries in references.motions.values() {
+        for entry in entries {
+            if let Some(sound) = &entry.sound {
+                let path = base_directory.join(sound);
+                let bytes = std::fs::read(&path).map_err(|source| Error::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+                can3.insert_resource(sound.clone(), bytes)?;
+            }
+        }
+    }
     can3.write_to(output_directory.join(format!("{model_name}.can3")))
 }
 

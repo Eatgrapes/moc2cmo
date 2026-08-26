@@ -40,6 +40,33 @@ impl Can3Project {
             obfuscation_key: 42,
         })
     }
+
+    /// Adds or replaces a binary resource in the CAN3 archive.
+    pub fn insert_resource(
+        &mut self,
+        path: impl Into<String>,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Result<()> {
+        let path = path.into();
+        validate_resource_path(&path)?;
+        let bytes = bytes.into();
+        if let Some(resource) = self
+            .resources
+            .iter_mut()
+            .find(|resource| resource.path == path)
+        {
+            resource.bytes = bytes;
+            resource.compression = Compression::Raw;
+        } else {
+            self.resources.push(AnimationResource {
+                path,
+                tag: String::new(),
+                bytes,
+                compression: Compression::Raw,
+            });
+        }
+        Ok(())
+    }
     /// Decodes a complete `.can3` CAFF archive.
     ///
     /// Both Cubism's streaming ZIP payloads and regular ZIP payloads are
@@ -171,6 +198,20 @@ impl Can3Project {
             source,
         })
     }
+}
+
+fn validate_resource_path(path: &str) -> Result<()> {
+    let normalized = path.replace('\\', "/");
+    if normalized.is_empty()
+        || normalized.starts_with('/')
+        || normalized.split('/').any(|part| part == "..")
+        || normalized == "main.xml"
+    {
+        return Err(Error::InvalidCan3(format!(
+            "invalid resource path {path:?}"
+        )));
+    }
+    Ok(())
 }
 
 fn replace_text_element(block: &str, tag: &str, name: &str, value: &str) -> Result<String> {

@@ -51,6 +51,8 @@ pub(crate) fn generate(
         ids += 1;
         let parts_effect = ids;
         ids += 1;
+        let visual_effect = ids;
+        ids += 1;
         let eye_effect = ids;
         ids += 1;
         let lip_effect = ids;
@@ -67,6 +69,7 @@ pub(crate) fn generate(
             scene,
             parameter_effect,
             parts_effect,
+            visual_effect,
             eye_effect,
             lip_effect,
             motion,
@@ -87,6 +90,14 @@ pub(crate) fn generate(
         write_parts_effect(
             &mut xml,
             parts_effect,
+            track,
+            motion,
+            input.fade_in_time,
+            input.fade_out_time,
+        );
+        write_visual_effect(
+            &mut xml,
+            visual_effect,
             track,
             motion,
             input.fade_in_time,
@@ -152,6 +163,7 @@ fn write_model_track(
     scene: u32,
     parameter: u32,
     parts: u32,
+    visual: u32,
     eye: u32,
     lip: u32,
     motion: &Motion3,
@@ -164,7 +176,7 @@ fn write_model_track(
     let duration = (motion.meta().duration() * motion.meta().fps())
         .ceil()
         .max(1.0) as u32;
-    writeln!(xml, "<CMvTrack_Live2DModel_Source xs.id=\"#{}\"><ICMvTrack_Linked xs.n=\"super\"><ICMvTrack_Source xs.n=\"super\"><s xs.n=\"name\">Model</s><b xs.n=\"isUserRenamed\">true</b><CTrackGuid xs.n=\"guid\" xs.ref=\"#{}\" /><i xs.n=\"start\">0</i><i xs.n=\"internalOffset\">0</i><i xs.n=\"duration\">{}</i><b xs.n=\"editable\">true</b><b xs.n=\"visible\">true</b><b xs.n=\"mute\">false</b><b xs.n=\"isGuide\">false</b><b xs.n=\"isRepeat\">false</b><b xs.n=\"soloSwitch\">false</b><null xs.n=\"soundEffect\" /><CMvEffectManager xs.n=\"effectManager\"><array xs.n=\"effectList\" count=\"4\" type=\"ICMvEffect\"><CMvEffect_EyeBlink xs.ref=\"#{}\" /><CMvEffect_LipSync xs.ref=\"#{}\" /><CMvEffect_Live2DParameter xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.ref=\"#{}\" /></array></CMvEffectManager><CTrackGuid xs.n=\"parentGuid\" xs.ref=\"#{}\" /><CSceneSource xs.n=\"_sceneSource\" xs.ref=\"#{}\" /><hash_map xs.n=\"userData\" count=\"0\" keyType=\"string\" /></ICMvTrack_Source><CResourceGuid xs.n=\"_resourceGuid\" xs.ref=\"#{}\" /></ICMvTrack_Linked><CMvEffect_Live2DParameter xs.n=\"keyParamEffect\" xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.n=\"partsVisibleEffect\" xs.ref=\"#{}\" /><CMvEffect_EyeBlink xs.n=\"eyeBlinkEffect\" xs.ref=\"#{}\" /><CMvEffect_LipSync xs.n=\"lipSyncEffect\" xs.ref=\"#{}\" /><null xs.n=\"formEditEffect\" /><GRectF xs.n=\"bounds\"><f xs.n=\"x\">0</f><f xs.n=\"y\">0</f><f xs.n=\"width\">640</f><f xs.n=\"height\">1100</f></GRectF></CMvTrack_Live2DModel_Source><CTrackGuid uuid=\"{}\" xs.id=\"#{}\" />", track, guid, duration, eye, lip, parameter, parts, parent_guid, scene, resource, parameter, parts, eye, lip, Uuid::new_v4(), guid).unwrap();
+    writeln!(xml, "<CMvTrack_Live2DModel_Source xs.id=\"#{}\"><ICMvTrack_Linked xs.n=\"super\"><ICMvTrack_Source xs.n=\"super\"><s xs.n=\"name\">Model</s><b xs.n=\"isUserRenamed\">true</b><CTrackGuid xs.n=\"guid\" xs.ref=\"#{}\" /><i xs.n=\"start\">0</i><i xs.n=\"internalOffset\">0</i><i xs.n=\"duration\">{}</i><b xs.n=\"editable\">true</b><b xs.n=\"visible\">true</b><b xs.n=\"mute\">false</b><b xs.n=\"isGuide\">false</b><b xs.n=\"isRepeat\">false</b><b xs.n=\"soloSwitch\">false</b><null xs.n=\"soundEffect\" /><CMvEffectManager xs.n=\"effectManager\"><array xs.n=\"effectList\" count=\"5\" type=\"ICMvEffect\"><CMvEffect_EyeBlink xs.ref=\"#{}\" /><CMvEffect_LipSync xs.ref=\"#{}\" /><CMvEffect_Live2DParameter xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.ref=\"#{}\" /><CMvEffect_VisualDefault xs.ref=\"#{}\" /></array></CMvEffectManager><CTrackGuid xs.n=\"parentGuid\" xs.ref=\"#{}\" /><CSceneSource xs.n=\"_sceneSource\" xs.ref=\"#{}\" /><hash_map xs.n=\"userData\" count=\"0\" keyType=\"string\" /></ICMvTrack_Source><CResourceGuid xs.n=\"_resourceGuid\" xs.ref=\"#{}\" /></ICMvTrack_Linked><CMvEffect_Live2DParameter xs.n=\"keyParamEffect\" xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.n=\"partsVisibleEffect\" xs.ref=\"#{}\" /><CMvEffect_VisualDefault xs.n=\"visualEffect\" xs.ref=\"#{}\" /><CMvEffect_EyeBlink xs.n=\"eyeBlinkEffect\" xs.ref=\"#{}\" /><CMvEffect_LipSync xs.n=\"lipSyncEffect\" xs.ref=\"#{}\" /><null xs.n=\"formEditEffect\" /><GRectF xs.n=\"bounds\"><f xs.n=\"x\">0</f><f xs.n=\"y\">0</f><f xs.n=\"width\">640</f><f xs.n=\"height\">1100</f></GRectF></CMvTrack_Live2DModel_Source><CTrackGuid uuid=\"{}\" xs.id=\"#{}\" />", track, guid, duration, eye, lip, parameter, parts, visual, parent_guid, scene, resource, parameter, parts, visual, eye, lip, Uuid::new_v4(), guid).unwrap();
     let _ = (groups, fade_in_time, fade_out_time);
     Ok(())
 }
@@ -198,7 +210,7 @@ fn write_parameter_effect(
     write!(xml, "{}\">", curves.len()).unwrap();
     for (index, curve) in curves.iter().enumerate() {
         let id = effect * 10_000 + index as u32;
-        writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"live2dParam_{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(curve.id()), id).unwrap();
+        writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(&curve_key(curve)), id).unwrap();
     }
     xml.push_str("</hash_map>");
     writeln!(xml, "<CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect></CMvEffect_Live2DParameter>", track).unwrap();
@@ -217,7 +229,7 @@ fn write_attr(
     let attr_id = if curve.target() == "PartOpacity" {
         format!("live2DPartsOpacity:{}", curve.id())
     } else {
-        format!("live2dParam_{}", curve.id())
+        curve_key(curve)
     };
     let points = curve_points(curve, fps);
     let fade_in = fade_in_time.map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
@@ -243,6 +255,15 @@ fn write_attr(
         writeln!(xml, "<CCurveType v=\"{}\" />", curve_type).unwrap();
     }
     xml.push_str("</carray_list><d xs.n=\"rangeMin\">-Infinity</d><d xs.n=\"rangeMax\">Infinity</d><b xs.n=\"isRepeat\">false</b></CMutableSequence></CMvAttrF>");
+}
+
+fn curve_key(curve: &MotionCurve) -> String {
+    match curve.target() {
+        "PartOpacity" => format!("live2DPartsOpacity:{}", curve.id()),
+        "Model" if curve.id() == "Opacity" => "opacity".into(),
+        "Model" => format!("model_{}", curve.id()),
+        _ => format!("live2dParam_{}", curve.id()),
+    }
 }
 
 struct CurvePoint {
@@ -340,6 +361,45 @@ fn write_parts_effect(
         writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"live2DPartsOpacity:{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(curve.id()), id).unwrap();
     }
     writeln!(xml, "</hash_map><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect><carray_list xs.n=\"effectParameterAttrIds\" count=\"0\" /></CMvEffect_Live2DPartsVisible>", track).unwrap();
+}
+
+fn write_visual_effect(
+    xml: &mut String,
+    effect: u32,
+    track: u32,
+    motion: &Motion3,
+    fade_in_time: Option<f32>,
+    fade_out_time: Option<f32>,
+) {
+    let opacity = motion
+        .curves()
+        .iter()
+        .find(|curve| curve.target() == "Model" && curve.id() == "Opacity");
+    let count = usize::from(opacity.is_some());
+    writeln!(xml, "<CMvEffect_VisualDefault xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"VisualDefault\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, count).unwrap();
+    if let Some(curve) = opacity {
+        write_attr(
+            xml,
+            effect * 10_000,
+            track,
+            curve,
+            motion.meta().fps(),
+            fade_in_time,
+            fade_out_time,
+        );
+    }
+    writeln!(xml, "</array><hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" /><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect>", track).unwrap();
+    if opacity.is_some() {
+        writeln!(
+            xml,
+            "<CMvAttrF xs.n=\"attrOpacity\" xs.ref=\"#{}\" />",
+            effect * 10_000
+        )
+        .unwrap();
+    } else {
+        xml.push_str("<null xs.n=\"attrOpacity\" />\n");
+    }
+    xml.push_str("</CMvEffect_VisualDefault>\n");
 }
 
 fn write_special_effects(xml: &mut String, eye: u32, lip: u32, track: u32, groups: &[Model3Group]) {
