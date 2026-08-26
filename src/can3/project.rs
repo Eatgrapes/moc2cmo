@@ -6,6 +6,9 @@ use crate::{
     Error, Result,
     caff::{ArchiveEntry, Compression, decode_archive, encode_archive},
 };
+use crate::{model3::Model3Group, motion3::Motion3};
+
+use super::generator;
 
 /// A decoded Cubism `.can3` animation project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +27,19 @@ struct AnimationResource {
 }
 
 impl Can3Project {
+    /// Creates a CAN3 project from a model manifest's motions and groups.
+    pub(crate) fn from_model3(
+        animation_name: &str,
+        model_path: &str,
+        motions: &[(String, Motion3)],
+        groups: &[Model3Group],
+    ) -> Result<Self> {
+        Ok(Self {
+            main_xml: generator::generate(animation_name, model_path, motions, groups)?,
+            resources: Vec::new(),
+            obfuscation_key: 42,
+        })
+    }
     /// Decodes a complete `.can3` CAFF archive.
     ///
     /// Both Cubism's streaming ZIP payloads and regular ZIP payloads are

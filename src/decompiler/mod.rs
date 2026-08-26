@@ -4,7 +4,10 @@ mod xml;
 
 use std::path::Path;
 
-use crate::{Error, Result, cmo3::Cmo3Project, moc3::Moc3Model};
+use crate::{
+    Error, Result, can3::Can3Project, cmo3::Cmo3Project, moc3::Moc3Model, model3::Model3,
+    motion3::Motion3,
+};
 
 pub use texture::Texture;
 
@@ -125,4 +128,75 @@ pub fn decompile(moc3: &[u8]) -> Result<Vec<u8>> {
 /// written.
 pub fn decompile_to_file(moc3: &[u8], path: impl AsRef<Path>) -> Result<()> {
     Decompiler::new().decompile_to_file(moc3, path)
+}
+
+/// Reads a Cubism `model3.json` manifest and writes matching CMO3 and CAN3 files.
+///
+/// All paths in the manifest are resolved relative to the manifest's directory.
+/// The output directory is created when it does not exist. The generated files
+/// use the manifest file stem as their base name.
+///
+/// # Errors
+///
+/// Returns an error when a referenced model, texture, motion, or output file
+/// cannot be read or written.
+pub fn decompile_model3_to_files(
+    model3_path: impl AsRef<Path>,
+    output_directory: impl AsRef<Path>,
+) -> Result<()> {
+    let model3_path = model3_path.as_ref();
+    let base_directory = model3_path.parent().unwrap_or_else(|| Path::new("."));
+    let manifest_bytes = std::fs::read(model3_path).map_err(|source| Error::Io {
+        path: model3_path.to_path_buf(),
+        source,
+    })?;
+    let manifest = Model3::from_json_bytes(&manifest_bytes)?;
+    let references = manifest.file_references();
+    let moc3_path = base_directory.join(&references.moc);
+    let moc3 = std::fs::read(&moc3_path).map_err(|source| Error::Io {
+        path: moc3_path.clone(),
+        source,
+    })?;
+
+    let mut decompiler = Decompiler::new();
+    let model_name = model3_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("model");
+    decompiler.set_model_name(model_name);
+    for texture in &references.textures {
+        let path = base_directory.join(texture);
+        let bytes = std::fs::read(&path).map_err(|source| Error::Io {
+            path: path.clone(),
+            source,
+        })?;
+        decompiler.push_texture(Texture::from_png(bytes)?);
+    }
+
+    let output_directory = output_directory.as_ref();
+    std::fs::create_dir_all(output_directory).map_err(|source| Error::Io {
+        path: output_directory.to_path_buf(),
+        source,
+    })?;
+    let cmo3_path = output_directory.join(format!("{model_name}.cmo3"));
+    decompiler.decompile_to_file(&moc3, &cmo3_path)?;
+
+    let mut motions = Vec::new();
+    for (group, entries) in &references.motions {
+        for (index, entry) in entries.iter().enumerate() {
+            let path = base_directory.join(&entry.file);
+            let bytes = std::fs::read(&path).map_err(|source| Error::Io {
+                path: path.clone(),
+                source,
+            })?;
+            let motion = Motion3::from_json_bytes(&bytes)?;
+            motions.push((format!("{group}_{index}"), motion));
+        }
+    }
+    let model_file_name = cmo3_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("model.cmo3");
+    let can3 = Can3Project::from_model3(model_name, model_file_name, &motions, manifest.groups())?;
+    can3.write_to(output_directory.join(format!("{model_name}.can3")))
 }

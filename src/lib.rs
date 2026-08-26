@@ -12,5 +12,7 @@ pub mod moc3;
 pub mod model3;
 pub mod motion3;
 
-pub use decompiler::{Decompiler, Texture, decompile, decompile_to_file};
+pub use decompiler::{
+    Decompiler, Texture, decompile, decompile_model3_to_files, decompile_to_file,
+};
 pub use error::{Error, Result};

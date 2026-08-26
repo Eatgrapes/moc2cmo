@@ -1,30 +1,15 @@
-use std::{env, error::Error, fs, io, path::Path};
+use std::{env, error::Error, io};
 
-use moc2cmo::{Decompiler, Texture, can3::Can3Project};
+use moc2cmo::decompile_model3_to_files;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut arguments = env::args_os().skip(1);
-    let moc3_path = required_argument(&mut arguments, "model.moc3 path")?;
-    let source_can3_path = required_argument(&mut arguments, "source CAN3 path")?;
-    let cmo3_output = required_argument(&mut arguments, "output.cmo3 path")?;
-    let can3_output = required_argument(&mut arguments, "output.can3 path")?;
-
-    let moc3 = fs::read(moc3_path)?;
-    let mut decompiler = Decompiler::new();
-    for texture_path in arguments {
-        decompiler.push_texture(Texture::from_png(fs::read(texture_path)?)?);
+    let model3_path = required_argument(&mut arguments, "model3.json path")?;
+    let output_directory = required_argument(&mut arguments, "output directory")?;
+    if arguments.next().is_some() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "unexpected argument").into());
     }
-    decompiler.decompile_to_file(&moc3, &cmo3_output)?;
-
-    let mut animation = Can3Project::decode(&fs::read(source_can3_path)?)?;
-    let model_name = Path::new(&cmo3_output).file_name().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "output model path has no file name",
-        )
-    })?;
-    animation.relink_model(model_name)?;
-    animation.write_to(can3_output)?;
+    decompile_model3_to_files(model3_path, output_directory)?;
     Ok(())
 }
 
