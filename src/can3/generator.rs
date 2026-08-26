@@ -62,54 +62,68 @@ pub(crate) fn generate(
         write_scene(&mut xml, scene, scene_guid, group, track, motion, name);
         write_model_track(
             &mut xml,
-            track,
-            track_guid,
-            scene,
-            parameter_effect,
-            parts_effect,
-            visual_effect,
-            eye_effect,
-            lip_effect,
+            TrackIds {
+                track,
+                guid: track_guid,
+                scene,
+                parameter: parameter_effect,
+                parts: parts_effect,
+                visual: visual_effect,
+                eye: eye_effect,
+                lip: lip_effect,
+            },
             motion,
-            groups,
             resource,
             root_track_guid,
-            input.fade_in_time,
-            input.fade_out_time,
         )?;
         write_parameter_effect(
             &mut xml,
             parameter_effect,
             track,
             motion,
-            input.fade_in_time,
-            input.fade_out_time,
+            FadeTimes {
+                in_time: input.fade_in_time,
+                out_time: input.fade_out_time,
+            },
         )?;
         write_parts_effect(
             &mut xml,
             parts_effect,
             track,
             motion,
-            input.fade_in_time,
-            input.fade_out_time,
+            FadeTimes {
+                in_time: input.fade_in_time,
+                out_time: input.fade_out_time,
+            },
         );
         write_visual_effect(
             &mut xml,
             visual_effect,
             track,
             motion,
-            input.fade_in_time,
-            input.fade_out_time,
+            FadeTimes {
+                in_time: input.fade_in_time,
+                out_time: input.fade_out_time,
+            },
         );
         write_special_effects(
             &mut xml,
-            eye_effect,
-            lip_effect,
-            track,
+            TrackIds {
+                track,
+                guid: track_guid,
+                scene,
+                parameter: parameter_effect,
+                parts: parts_effect,
+                visual: visual_effect,
+                eye: eye_effect,
+                lip: lip_effect,
+            },
             groups,
             motion,
-            input.fade_in_time,
-            input.fade_out_time,
+            FadeTimes {
+                in_time: input.fade_in_time,
+                out_time: input.fade_out_time,
+            },
         );
     }
     write_animation(
@@ -145,6 +159,24 @@ pub struct MotionInstance {
     pub fade_in_time: Option<f32>,
     /// Optional fade-out duration in seconds.
     pub fade_out_time: Option<f32>,
+}
+
+#[derive(Copy, Clone)]
+struct TrackIds {
+    track: u32,
+    guid: u32,
+    scene: u32,
+    parameter: u32,
+    parts: u32,
+    visual: u32,
+    eye: u32,
+    lip: u32,
+}
+
+#[derive(Copy, Clone)]
+struct FadeTimes {
+    in_time: Option<f32>,
+    out_time: Option<f32>,
 }
 
 fn write_header(xml: &mut String) {
@@ -338,20 +370,10 @@ fn write_scene(
 
 fn write_model_track(
     xml: &mut String,
-    track: u32,
-    guid: u32,
-    scene: u32,
-    parameter: u32,
-    parts: u32,
-    visual: u32,
-    eye: u32,
-    lip: u32,
+    ids: TrackIds,
     motion: &Motion3,
-    groups: &[Model3Group],
     resource: u32,
     parent_guid: u32,
-    fade_in_time: Option<f32>,
-    fade_out_time: Option<f32>,
 ) -> Result<()> {
     let duration = (motion.meta().duration() * motion.meta().fps())
         .ceil()
@@ -359,7 +381,7 @@ fn write_model_track(
     let mut writer = XmlWriter::new(xml);
     writer.start(
         "CMvTrack_Live2DModel_Source",
-        &[attr("xs.id", ref_id(track))],
+        &[attr("xs.id", ref_id(ids.track))],
     );
     writer.start("ICMvTrack_Linked", &[attr("xs.n", "super")]);
     writer.start("ICMvTrack_Source", &[attr("xs.n", "super")]);
@@ -367,7 +389,7 @@ fn write_model_track(
     writer.text("b", &[attr("xs.n", "isUserRenamed")], true);
     writer.empty(
         "CTrackGuid",
-        &[attr("xs.n", "guid"), attr("xs.ref", ref_id(guid))],
+        &[attr("xs.n", "guid"), attr("xs.ref", ref_id(ids.guid))],
     );
     writer.text("i", &[attr("xs.n", "start")], 0);
     writer.text("i", &[attr("xs.n", "internalOffset")], 0);
@@ -393,11 +415,11 @@ fn write_model_track(
         ],
     );
     for (tag, id) in [
-        ("CMvEffect_EyeBlink", eye),
-        ("CMvEffect_LipSync", lip),
-        ("CMvEffect_Live2DParameter", parameter),
-        ("CMvEffect_Live2DPartsVisible", parts),
-        ("CMvEffect_VisualDefault", visual),
+        ("CMvEffect_EyeBlink", ids.eye),
+        ("CMvEffect_LipSync", ids.lip),
+        ("CMvEffect_Live2DParameter", ids.parameter),
+        ("CMvEffect_Live2DPartsVisible", ids.parts),
+        ("CMvEffect_VisualDefault", ids.visual),
     ] {
         writer.empty(tag, &[attr("xs.ref", ref_id(id))]);
     }
@@ -412,7 +434,10 @@ fn write_model_track(
     );
     writer.empty(
         "CSceneSource",
-        &[attr("xs.n", "_sceneSource"), attr("xs.ref", ref_id(scene))],
+        &[
+            attr("xs.n", "_sceneSource"),
+            attr("xs.ref", ref_id(ids.scene)),
+        ],
     );
     writer.empty(
         "hash_map",
@@ -432,11 +457,11 @@ fn write_model_track(
     );
     writer.end("ICMvTrack_Linked");
     for (name, id) in [
-        ("keyParamEffect", parameter),
-        ("partsVisibleEffect", parts),
-        ("visualEffect", visual),
-        ("eyeBlinkEffect", eye),
-        ("lipSyncEffect", lip),
+        ("keyParamEffect", ids.parameter),
+        ("partsVisibleEffect", ids.parts),
+        ("visualEffect", ids.visual),
+        ("eyeBlinkEffect", ids.eye),
+        ("lipSyncEffect", ids.lip),
     ] {
         let tag = match name {
             "keyParamEffect" => "CMvEffect_Live2DParameter",
@@ -452,9 +477,11 @@ fn write_model_track(
     writer.end("CMvTrack_Live2DModel_Source");
     writer.empty(
         "CTrackGuid",
-        &[attr("uuid", Uuid::new_v4()), attr("xs.id", ref_id(guid))],
+        &[
+            attr("uuid", Uuid::new_v4()),
+            attr("xs.id", ref_id(ids.guid)),
+        ],
     );
-    let _ = (groups, fade_in_time, fade_out_time);
     Ok(())
 }
 
@@ -463,8 +490,7 @@ fn write_parameter_effect(
     effect: u32,
     track: u32,
     motion: &Motion3,
-    fade_in_time: Option<f32>,
-    fade_out_time: Option<f32>,
+    fades: FadeTimes,
 ) -> Result<()> {
     let curves = motion
         .curves()
@@ -484,8 +510,8 @@ fn write_parameter_effect(
             track,
             curve,
             motion.meta().fps(),
-            fade_in_time,
-            fade_out_time,
+            fades.in_time,
+            fades.out_time,
         );
     }
     writer.end("array");
@@ -732,8 +758,7 @@ fn write_parts_effect(
     effect: u32,
     track: u32,
     motion: &Motion3,
-    fade_in_time: Option<f32>,
-    fade_out_time: Option<f32>,
+    fades: FadeTimes,
 ) {
     let curves = motion
         .curves()
@@ -758,8 +783,8 @@ fn write_parts_effect(
             track,
             curve,
             motion.meta().fps(),
-            fade_in_time,
-            fade_out_time,
+            fades.in_time,
+            fades.out_time,
         );
     }
     writer.end("array");
@@ -805,8 +830,7 @@ fn write_visual_effect(
     effect: u32,
     track: u32,
     motion: &Motion3,
-    fade_in_time: Option<f32>,
-    fade_out_time: Option<f32>,
+    fades: FadeTimes,
 ) {
     let opacity = motion
         .curves()
@@ -823,8 +847,8 @@ fn write_visual_effect(
             track,
             curve,
             motion.meta().fps(),
-            fade_in_time,
-            fade_out_time,
+            fades.in_time,
+            fades.out_time,
         );
     }
     writer.end("array");
@@ -857,19 +881,19 @@ fn write_visual_effect(
 
 fn write_special_effects(
     xml: &mut String,
-    eye: u32,
-    lip: u32,
-    track: u32,
+    track_ids: TrackIds,
     groups: &[Model3Group],
     motion: &Motion3,
-    fade_in_time: Option<f32>,
-    fade_out_time: Option<f32>,
+    fades: FadeTimes,
 ) {
-    for (id, name, target) in [(eye, "EyeBlink", "EyeBlink"), (lip, "LipSync", "LipSync")] {
+    for (id, name, target) in [
+        (track_ids.eye, "EyeBlink", "EyeBlink"),
+        (track_ids.lip, "LipSync", "LipSync"),
+    ] {
         let group = groups
             .iter()
             .find(|group| group.name == name && group.target == "Parameter");
-        let ids = group.map(|group| group.ids.as_slice()).unwrap_or(&[]);
+        let parameter_ids = group.map(|group| group.ids.as_slice()).unwrap_or(&[]);
         let model_id = if name == "EyeBlink" {
             "EyeBlink"
         } else {
@@ -896,11 +920,11 @@ fn write_special_effects(
             write_attr(
                 &mut writer,
                 id * 10_000,
-                track,
+                track_ids.track,
                 curve,
                 motion.meta().fps(),
-                fade_in_time,
-                fade_out_time,
+                fades.in_time,
+                fades.out_time,
             );
         }
         writer.end("array");
@@ -927,17 +951,20 @@ fn write_special_effects(
         writer.end("hash_map");
         writer.empty(
             "CMvTrack_Live2DModel_Source",
-            &[attr("xs.n", "track"), attr("xs.ref", ref_id(track))],
+            &[
+                attr("xs.n", "track"),
+                attr("xs.ref", ref_id(track_ids.track)),
+            ],
         );
         writer.end("ICMvEffect");
         writer.start(
             "carray_list",
             &[
                 attr("xs.n", "effectParameterAttrIds"),
-                attr("count", ids.len()),
+                attr("count", parameter_ids.len()),
             ],
         );
-        for parameter in ids {
+        for parameter in parameter_ids {
             writer.empty(
                 "CAttrId",
                 &[attr("idstr", format!("live2dParam_{parameter}"))],

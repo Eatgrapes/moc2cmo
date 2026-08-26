@@ -123,6 +123,14 @@ impl Can3Project {
         validate_xml(&self.main_xml)
     }
 
+    /// Validates every internal `xs.ref="#..."` reference in the project XML.
+    ///
+    /// This is useful after decoding a project or before handing it to Cubism
+    /// Editor.
+    pub fn validate_references(&self) -> Result<()> {
+        validate_references(&self.main_xml)
+    }
+
     /// Returns the signed CAFF XOR key used when encoding.
     pub fn obfuscation_key(&self) -> i32 {
         self.obfuscation_key
