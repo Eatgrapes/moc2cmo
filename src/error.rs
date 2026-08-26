@@ -3,6 +3,24 @@ use std::path::PathBuf;
 /// An error produced while reading a MOC3 model or writing a CMO3 project.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A Cubism JSON document could not be parsed or contains invalid data.
+    #[error("invalid {format}: {message}")]
+    InvalidJson {
+        /// The Cubism JSON format name.
+        format: &'static str,
+        /// A human-readable parsing or validation message.
+        message: String,
+    },
+
+    /// A Cubism JSON document uses an unsupported format version.
+    #[error("unsupported {format} version {version}")]
+    UnsupportedVersion {
+        /// The Cubism JSON format name.
+        format: &'static str,
+        /// The version found in the document.
+        version: u32,
+    },
+
     /// The input is not a supported or structurally valid MOC3 file.
     #[error("invalid MOC3: {0}")]
     InvalidMoc3(String),
