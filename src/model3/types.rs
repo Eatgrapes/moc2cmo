@@ -10,9 +10,35 @@ pub struct Model3References {
     /// Relative paths to texture atlas pages.
     #[serde(rename = "Textures", default)]
     pub textures: Vec<String>,
+    /// Optional physics3 JSON path.
+    #[serde(rename = "Physics", default)]
+    pub physics: Option<String>,
+    /// Optional pose3 JSON path.
+    #[serde(rename = "Pose", default)]
+    pub pose: Option<String>,
+    /// Optional userdata3 JSON path.
+    #[serde(rename = "UserData", default)]
+    pub user_data: Option<String>,
+    /// Optional display-info JSON path.
+    #[serde(rename = "DisplayInfo", default)]
+    pub display_info: Option<String>,
+    /// Optional expression files.
+    #[serde(rename = "Expressions", default)]
+    pub expressions: Vec<Model3Expression>,
     /// Motion groups keyed by their caller-facing group name.
     #[serde(rename = "Motions", default)]
     pub motions: BTreeMap<String, Vec<Model3Motion>>,
+}
+
+/// An expression file referenced by a model manifest.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Model3Expression {
+    /// Expression name.
+    #[serde(rename = "Name")]
+    pub name: String,
+    /// Relative path to the expression JSON file.
+    #[serde(rename = "File")]
+    pub file: String,
 }
 
 /// One motion reference in a model manifest.

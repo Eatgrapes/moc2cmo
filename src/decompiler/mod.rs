@@ -179,7 +179,17 @@ pub fn decompile_model3_to_files(
         source,
     })?;
     let cmo3_path = output_directory.join(format!("{model_name}.cmo3"));
-    decompiler.decompile_to_file(&moc3, &cmo3_path)?;
+    let mut cmo3 = decompiler.decompile_project(&moc3)?;
+    cmo3.insert_resource("moc2cmo.model3.json", manifest_bytes);
+    for resource in referenced_json_paths(references) {
+        let path = base_directory.join(&resource);
+        let bytes = std::fs::read(&path).map_err(|source| Error::Io {
+            path: path.clone(),
+            source,
+        })?;
+        cmo3.insert_resource(resource, bytes);
+    }
+    cmo3.write_to(&cmo3_path)?;
 
     let mut motions = Vec::new();
     for (group, entries) in &references.motions {
@@ -204,4 +214,26 @@ pub fn decompile_model3_to_files(
         .unwrap_or("model.cmo3");
     let can3 = Can3Project::from_model3(model_name, model_file_name, &motions, manifest.groups())?;
     can3.write_to(output_directory.join(format!("{model_name}.can3")))
+}
+
+fn referenced_json_paths(references: &crate::model3::Model3References) -> Vec<String> {
+    let mut paths = Vec::new();
+    for path in [
+        references.physics.clone(),
+        references.pose.clone(),
+        references.user_data.clone(),
+        references.display_info.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        paths.push(path);
+    }
+    paths.extend(
+        references
+            .expressions
+            .iter()
+            .map(|expression| expression.file.clone()),
+    );
+    paths
 }
