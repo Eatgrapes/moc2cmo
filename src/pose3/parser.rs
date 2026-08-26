@@ -13,6 +13,16 @@ pub struct Pose3 {
 }
 
 impl Pose3 {
+    /// Reads and parses a pose document from a UTF-8 JSON file.
+    pub fn from_json_file(path: impl AsRef<std::path::Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let bytes = std::fs::read(path).map_err(|source| Error::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        Self::from_json_bytes(&bytes)
+    }
+
     /// Parses a pose document from UTF-8 JSON bytes.
     pub fn from_json_bytes(source: &[u8]) -> Result<Self> {
         let source = std::str::from_utf8(source).map_err(|error| Error::InvalidJson {
