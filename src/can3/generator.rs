@@ -103,7 +103,16 @@ pub(crate) fn generate(
             input.fade_in_time,
             input.fade_out_time,
         );
-        write_special_effects(&mut xml, eye_effect, lip_effect, track, groups);
+        write_special_effects(
+            &mut xml,
+            eye_effect,
+            lip_effect,
+            track,
+            groups,
+            motion,
+            input.fade_in_time,
+            input.fade_out_time,
+        );
     }
     write_animation(
         &mut xml,
@@ -153,7 +162,30 @@ fn write_scene(
     let frames = (motion.meta().duration() * motion.meta().fps())
         .ceil()
         .max(1.0) as u32;
-    writeln!(xml, "<CSceneSource xs.id=\"#{}\"><s xs.n=\"sceneName\">{}</s><CImageCanvas xs.n=\"canvas\"><i xs.n=\"pixelWidth\">320</i><i xs.n=\"pixelHeight\">240</i><CColor xs.n=\"background\" /></CImageCanvas><CSceneGuid xs.n=\"guid\" xs.ref=\"#{}\" /><s xs.n=\"tag\" /><CTrackSourceSet xs.n=\"trackSourceSet\"><carray_list xs.n=\"_sources\" count=\"2\"><CMvTrack_Group_Source xs.ref=\"#{}\" /><CMvTrack_Live2DModel_Source xs.ref=\"#{}\" /></carray_list></CTrackSourceSet><CMvTrack_Group_Source xs.n=\"rootTrack\" xs.ref=\"#{}\" /><CMvMovieInfo xs.n=\"movieInfo\"><i xs.n=\"width\">320</i><i xs.n=\"height\">240</i><i xs.n=\"duration\">{}</i><d xs.n=\"fps\">{}</d><i xs.n=\"workspaceStart\">0</i><i xs.n=\"workspaceEnd\">{}</i><CColor xs.n=\"background\" /><i xs.n=\"fadeInMSec\">-1</i><i xs.n=\"fadeOutMSec\">-1</i><b xs.n=\"isBezierRestricted\">{}</b><b xs.n=\"isLoopMotion\">{}</b><i xs.n=\"startFrame\">0</i><CFrameIndexType xs.n=\"frameIndexType\" v=\"ZERO_INDEX\" /></CMvMovieInfo><hash_map xs.n=\"marker\" count=\"0\" keyType=\"string\" /><CCurveType xs.n=\"defaultParameterCurveType\" v=\"SMOOTH\" /><CCurveType xs.n=\"defaultPartCurveType\" v=\"STEP\" /><b xs.n=\"fixAspect\">true</b><Animation xs.n=\"targetVersion\" v=\"FOR_SDK\" /></CSceneSource><CSceneGuid uuid=\"{}\" xs.id=\"#{}\" />", scene, escape(name), scene_guid, group, track, group, frames + 1, motion.meta().fps(), frames, motion.meta().are_beziers_restricted(), motion.meta().is_looping(), Uuid::new_v4(), scene_guid).unwrap();
+    writeln!(xml, "<CSceneSource xs.id=\"#{}\"><s xs.n=\"sceneName\">{}</s><CImageCanvas xs.n=\"canvas\"><i xs.n=\"pixelWidth\">320</i><i xs.n=\"pixelHeight\">240</i><CColor xs.n=\"background\" /></CImageCanvas><CSceneGuid xs.n=\"guid\" xs.ref=\"#{}\" /><s xs.n=\"tag\" /><CTrackSourceSet xs.n=\"trackSourceSet\"><carray_list xs.n=\"_sources\" count=\"2\"><CMvTrack_Group_Source xs.ref=\"#{}\" /><CMvTrack_Live2DModel_Source xs.ref=\"#{}\" /></carray_list></CTrackSourceSet><CMvTrack_Group_Source xs.n=\"rootTrack\" xs.ref=\"#{}\" /><CMvMovieInfo xs.n=\"movieInfo\"><i xs.n=\"width\">320</i><i xs.n=\"height\">240</i><i xs.n=\"duration\">{}</i><d xs.n=\"fps\">{}</d><i xs.n=\"workspaceStart\">0</i><i xs.n=\"workspaceEnd\">{}</i><CColor xs.n=\"background\" /><i xs.n=\"fadeInMSec\">-1</i><i xs.n=\"fadeOutMSec\">-1</i><b xs.n=\"isBezierRestricted\">{}</b><b xs.n=\"isLoopMotion\">{}</b><i xs.n=\"startFrame\">0</i><CFrameIndexType xs.n=\"frameIndexType\" v=\"ZERO_INDEX\" /></CMvMovieInfo>", scene, escape(name), scene_guid, group, track, group, frames + 1, motion.meta().fps(), frames, motion.meta().are_beziers_restricted(), motion.meta().is_looping()).unwrap();
+    writeln!(
+        xml,
+        "<hash_map xs.n=\"marker\" count=\"{}\" keyType=\"string\">",
+        motion.user_data().len()
+    )
+    .unwrap();
+    for event in motion.user_data() {
+        writeln!(
+            xml,
+            "<entry><s xs.n=\"key\">{}</s><s xs.n=\"value\">{}</s></entry>",
+            event.time,
+            escape(&event.value)
+        )
+        .unwrap();
+    }
+    xml.push_str("</hash_map><CCurveType xs.n=\"defaultParameterCurveType\" v=\"SMOOTH\" /><CCurveType xs.n=\"defaultPartCurveType\" v=\"STEP\" /><b xs.n=\"fixAspect\">true</b><Animation xs.n=\"targetVersion\" v=\"FOR_SDK\" /></CSceneSource>");
+    writeln!(
+        xml,
+        "<CSceneGuid uuid=\"{}\" xs.id=\"#{}\" />",
+        Uuid::new_v4(),
+        scene_guid
+    )
+    .unwrap();
 }
 
 fn write_model_track(
@@ -261,6 +293,8 @@ fn curve_key(curve: &MotionCurve) -> String {
     match curve.target() {
         "PartOpacity" => format!("live2DPartsOpacity:{}", curve.id()),
         "Model" if curve.id() == "Opacity" => "opacity".into(),
+        "Model" if curve.id() == "EyeBlink" => "eyeOpen".into(),
+        "Model" if curve.id() == "LipSync" => "soundLevel".into(),
         "Model" => format!("model_{}", curve.id()),
         _ => format!("live2dParam_{}", curve.id()),
     }
@@ -402,12 +436,30 @@ fn write_visual_effect(
     xml.push_str("</CMvEffect_VisualDefault>\n");
 }
 
-fn write_special_effects(xml: &mut String, eye: u32, lip: u32, track: u32, groups: &[Model3Group]) {
+fn write_special_effects(
+    xml: &mut String,
+    eye: u32,
+    lip: u32,
+    track: u32,
+    groups: &[Model3Group],
+    motion: &Motion3,
+    fade_in_time: Option<f32>,
+    fade_out_time: Option<f32>,
+) {
     for (id, name, target) in [(eye, "EyeBlink", "EyeBlink"), (lip, "LipSync", "LipSync")] {
         let group = groups
             .iter()
             .find(|group| group.name == name && group.target == "Parameter");
         let ids = group.map(|group| group.ids.as_slice()).unwrap_or(&[]);
+        let model_id = if name == "EyeBlink" {
+            "EyeBlink"
+        } else {
+            "LipSync"
+        };
+        let model_curve = motion
+            .curves()
+            .iter()
+            .find(|curve| curve.target() == "Model" && curve.id() == model_id);
         let kind = if target == "EyeBlink" {
             "CMvEffect_EyeBlink"
         } else {
@@ -423,8 +475,34 @@ fn write_special_effects(xml: &mut String, eye: u32, lip: u32, track: u32, group
         .unwrap();
         xml.push_str("  <b xs.n=\"isActive\">true</b>\n");
         xml.push_str("  <b xs.n=\"canDelete\">true</b>\n");
-        xml.push_str("  <array xs.n=\"attrList\" count=\"0\" type=\"ICMvAttr\" />\n");
-        xml.push_str("  <hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" />\n");
+        writeln!(
+            xml,
+            "  <array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">",
+            usize::from(model_curve.is_some())
+        )
+        .unwrap();
+        if let Some(curve) = model_curve {
+            write_attr(
+                xml,
+                id * 10_000,
+                track,
+                curve,
+                motion.meta().fps(),
+                fade_in_time,
+                fade_out_time,
+            );
+        }
+        xml.push_str("  </array>\n");
+        writeln!(
+            xml,
+            "  <hash_map xs.n=\"attrMap\" count=\"{}\" keyType=\"string\">",
+            usize::from(model_curve.is_some())
+        )
+        .unwrap();
+        if let Some(curve) = model_curve {
+            writeln!(xml, "    <entry><CAttrId xs.n=\"key\" idstr=\"{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", curve_key(curve), id * 10_000).unwrap();
+        }
+        xml.push_str("  </hash_map>\n");
         writeln!(
             xml,
             "  <CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" />",
