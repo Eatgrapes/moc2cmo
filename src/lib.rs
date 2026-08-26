@@ -7,6 +7,7 @@ mod caff;
 pub mod can3;
 pub mod cmo3;
 mod decompiler;
+pub mod displayinfo3;
 mod error;
 pub mod expression3;
 pub mod moc3;
@@ -14,6 +15,7 @@ pub mod model3;
 pub mod motion3;
 pub mod physics3;
 pub mod pose3;
+pub mod userdata3;
 
 pub use decompiler::{
     Decompiler, Texture, decompile, decompile_model3_to_files, decompile_to_file,

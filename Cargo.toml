@@ -1,6 +1,6 @@
 [package]
 name = "moc2cmo"
-version = "1.1.17"
+version = "1.1.18"
 edition = "2024"
 authors = ["Eatgrapes <Eatgrapesem232@qq.com>"]
 description = "A Rust library for decompiling Cubism .moc3 models into readable .cmo3 projects"

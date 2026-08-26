@@ -5,8 +5,9 @@ mod xml;
 use std::path::Path;
 
 use crate::{
-    Error, Result, can3::Can3Project, cmo3::Cmo3Project, expression3::Expression3, moc3::Moc3Model,
-    model3::Model3, motion3::Motion3, physics3::Physics3, pose3::Pose3,
+    Error, Result, can3::Can3Project, cmo3::Cmo3Project, displayinfo3::DisplayInfo3,
+    expression3::Expression3, moc3::Moc3Model, model3::Model3, motion3::Motion3,
+    physics3::Physics3, pose3::Pose3, userdata3::UserData3,
 };
 
 pub use texture::Texture;
@@ -177,6 +178,10 @@ pub fn decompile_model3_to_files(
             Physics3::from_json_bytes(&bytes)?;
         } else if path_text.ends_with(".pose3.json") {
             Pose3::from_json_bytes(&bytes)?;
+        } else if path_text.ends_with(".userdata3.json") {
+            UserData3::from_json_bytes(&bytes)?;
+        } else if path_text.ends_with(".cdi3.json") {
+            DisplayInfo3::from_json_bytes(&bytes)?;
         } else {
             let _ = serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|error| {
                 Error::InvalidJson {
