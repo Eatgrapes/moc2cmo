@@ -8,6 +8,7 @@ pub mod can3;
 pub mod cmo3;
 mod decompiler;
 mod error;
+pub mod expression3;
 pub mod moc3;
 pub mod model3;
 pub mod motion3;
