@@ -13,7 +13,7 @@ use crate::{
 pub(crate) fn generate(
     animation_name: &str,
     model_path: &str,
-    motions: &[(String, Motion3)],
+    motions: &[MotionInstance],
     groups: &[Model3Group],
 ) -> Result<Vec<u8>> {
     if motions.is_empty() {
@@ -34,7 +34,9 @@ pub(crate) fn generate(
     let resource_data = ids;
     ids += 1;
     let mut scene_refs = Vec::new();
-    for (name, motion) in motions {
+    for input in motions {
+        let name = &input.name;
+        let motion = &input.motion;
         let scene = ids;
         ids += 1;
         let group = ids;
@@ -71,9 +73,25 @@ pub(crate) fn generate(
             groups,
             resource,
             root_track_guid,
+            input.fade_in_time,
+            input.fade_out_time,
         )?;
-        write_parameter_effect(&mut xml, parameter_effect, track, motion)?;
-        write_parts_effect(&mut xml, parts_effect, track);
+        write_parameter_effect(
+            &mut xml,
+            parameter_effect,
+            track,
+            motion,
+            input.fade_in_time,
+            input.fade_out_time,
+        )?;
+        write_parts_effect(
+            &mut xml,
+            parts_effect,
+            track,
+            motion,
+            input.fade_in_time,
+            input.fade_out_time,
+        );
         write_special_effects(&mut xml, eye_effect, lip_effect, track, groups);
     }
     write_animation(
@@ -95,6 +113,13 @@ pub(crate) fn generate(
     writeln!(xml, "<CAnimation xs.ref=\"#{}\" />", animation).unwrap();
     xml.push_str("</main></root>");
     Ok(xml.into_bytes())
+}
+
+pub(crate) struct MotionInstance {
+    pub(crate) name: String,
+    pub(crate) motion: Motion3,
+    pub(crate) fade_in_time: Option<f32>,
+    pub(crate) fade_out_time: Option<f32>,
 }
 
 fn write_header(xml: &mut String) {
@@ -133,12 +158,14 @@ fn write_model_track(
     groups: &[Model3Group],
     resource: u32,
     parent_guid: u32,
+    fade_in_time: Option<f32>,
+    fade_out_time: Option<f32>,
 ) -> Result<()> {
     let duration = (motion.meta().duration() * motion.meta().fps())
         .ceil()
         .max(1.0) as u32;
     writeln!(xml, "<CMvTrack_Live2DModel_Source xs.id=\"#{}\"><ICMvTrack_Linked xs.n=\"super\"><ICMvTrack_Source xs.n=\"super\"><s xs.n=\"name\">Model</s><b xs.n=\"isUserRenamed\">true</b><CTrackGuid xs.n=\"guid\" xs.ref=\"#{}\" /><i xs.n=\"start\">0</i><i xs.n=\"internalOffset\">0</i><i xs.n=\"duration\">{}</i><b xs.n=\"editable\">true</b><b xs.n=\"visible\">true</b><b xs.n=\"mute\">false</b><b xs.n=\"isGuide\">false</b><b xs.n=\"isRepeat\">false</b><b xs.n=\"soloSwitch\">false</b><null xs.n=\"soundEffect\" /><CMvEffectManager xs.n=\"effectManager\"><array xs.n=\"effectList\" count=\"4\" type=\"ICMvEffect\"><CMvEffect_EyeBlink xs.ref=\"#{}\" /><CMvEffect_LipSync xs.ref=\"#{}\" /><CMvEffect_Live2DParameter xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.ref=\"#{}\" /></array></CMvEffectManager><CTrackGuid xs.n=\"parentGuid\" xs.ref=\"#{}\" /><CSceneSource xs.n=\"_sceneSource\" xs.ref=\"#{}\" /><hash_map xs.n=\"userData\" count=\"0\" keyType=\"string\" /></ICMvTrack_Source><CResourceGuid xs.n=\"_resourceGuid\" xs.ref=\"#{}\" /></ICMvTrack_Linked><CMvEffect_Live2DParameter xs.n=\"keyParamEffect\" xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.n=\"partsVisibleEffect\" xs.ref=\"#{}\" /><CMvEffect_EyeBlink xs.n=\"eyeBlinkEffect\" xs.ref=\"#{}\" /><CMvEffect_LipSync xs.n=\"lipSyncEffect\" xs.ref=\"#{}\" /><null xs.n=\"formEditEffect\" /><GRectF xs.n=\"bounds\"><f xs.n=\"x\">0</f><f xs.n=\"y\">0</f><f xs.n=\"width\">640</f><f xs.n=\"height\">1100</f></GRectF></CMvTrack_Live2DModel_Source><CTrackGuid uuid=\"{}\" xs.id=\"#{}\" />", track, guid, duration, eye, lip, parameter, parts, parent_guid, scene, resource, parameter, parts, eye, lip, Uuid::new_v4(), guid).unwrap();
-    let _ = groups;
+    let _ = (groups, fade_in_time, fade_out_time);
     Ok(())
 }
 
@@ -147,6 +174,8 @@ fn write_parameter_effect(
     effect: u32,
     track: u32,
     motion: &Motion3,
+    fade_in_time: Option<f32>,
+    fade_out_time: Option<f32>,
 ) -> Result<()> {
     let curves = motion
         .curves()
@@ -161,6 +190,8 @@ fn write_parameter_effect(
             track,
             curve,
             motion.meta().fps(),
+            fade_in_time,
+            fade_out_time,
         );
     }
     xml.push_str("</array><hash_map xs.n=\"attrMap\" count=\"");
@@ -174,14 +205,24 @@ fn write_parameter_effect(
     Ok(())
 }
 
-fn write_attr(xml: &mut String, id: u32, track: u32, curve: &MotionCurve, fps: f32) {
+fn write_attr(
+    xml: &mut String,
+    id: u32,
+    track: u32,
+    curve: &MotionCurve,
+    fps: f32,
+    fade_in_time: Option<f32>,
+    fade_out_time: Option<f32>,
+) {
     let attr_id = if curve.target() == "PartOpacity" {
         format!("live2DPartsOpacity:{}", curve.id())
     } else {
         format!("live2dParam_{}", curve.id())
     };
     let points = curve_points(curve, fps);
-    writeln!(xml, "<CMvAttrF xs.id=\"#{}\"><ICMvAttr xs.n=\"super\"><b xs.n=\"isShyMode\">false</b><CAttrId xs.n=\"id\" idstr=\"{}\" /><s xs.n=\"name\">{}</s><b xs.n=\"isActive\">true</b><hash_map xs.n=\"optionParam\" count=\"0\" keyType=\"string\" /><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvAttr><CMutableSequence xs.n=\"valueData\"><ACValueSequence xs.n=\"super\"><d xs.n=\"curMin\">{}</d><d xs.n=\"curMax\">{}</d><i xs.n=\"posStart\">0</i><d xs.n=\"baseValue\">{}</d></ACValueSequence><array xs.n=\"points\" count=\"{}\" type=\"CBezierPt\">", id, escape(&attr_id), escape(curve.id()), track, points.iter().map(|p| p.value).fold(f32::INFINITY, f32::min), points.iter().map(|p| p.value).fold(f32::NEG_INFINITY, f32::max), curve.first_point().value, points.len()).unwrap();
+    let fade_in = fade_in_time.map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
+    let fade_out = fade_out_time.map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
+    writeln!(xml, "<CMvAttrF xs.id=\"#{}\"><ICMvAttr xs.n=\"super\"><b xs.n=\"isShyMode\">false</b><CAttrId xs.n=\"id\" idstr=\"{}\" /><s xs.n=\"name\">{}</s><b xs.n=\"isActive\">true</b><hash_map xs.n=\"optionParam\" count=\"3\" keyType=\"string\"><i xs.n=\"KEY_ATTR_FADE_OUT\">{}</i><i xs.n=\"KEY_ATTR_FADE_IN\">{}</i><s xs.n=\"KEY_PARAM_ID\">{}</s></hash_map><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvAttr><CMutableSequence xs.n=\"valueData\"><ACValueSequence xs.n=\"super\"><d xs.n=\"curMin\">{}</d><d xs.n=\"curMax\">{}</d><i xs.n=\"posStart\">0</i><d xs.n=\"baseValue\">{}</d></ACValueSequence><array xs.n=\"points\" count=\"{}\" type=\"CBezierPt\">", id, escape(&attr_id), escape(curve.id()), fade_out, fade_in, escape(&attr_id), track, points.iter().map(|p| p.value).fold(f32::INFINITY, f32::min), points.iter().map(|p| p.value).fold(f32::NEG_INFINITY, f32::max), curve.first_point().value, points.len()).unwrap();
     for point in &points {
         writeln!(xml, "<CBezierPt><CSeqPt xs.n=\"anchor\"><b xs.n=\"isCorner\">false</b><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d></CSeqPt><CBezierCtrlPt xs.n=\"next\"><f xs.n=\"posF\">{}</f><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d><b xs.n=\"isPosOptimized\">false</b></CBezierCtrlPt><CBezierCtrlPt xs.n=\"prev\"><f xs.n=\"posF\">{}</f><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d><b xs.n=\"isPosOptimized\">false</b></CBezierCtrlPt></CBezierPt>", point.frame, point.value, point.next.time, frame(point.next, fps), point.next.value, point.prev.time, frame(point.prev, fps), point.prev.value).unwrap();
     }
@@ -267,8 +308,38 @@ fn segment_type(segment: &MotionSegment) -> &'static str {
     }
 }
 
-fn write_parts_effect(xml: &mut String, effect: u32, track: u32) {
-    writeln!(xml, "<CMvEffect_Live2DPartsVisible xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:Live2DPartsOpacity\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"0\" type=\"ICMvAttr\" /><hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" /><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect><carray_list xs.n=\"effectParameterAttrIds\" count=\"0\" /></CMvEffect_Live2DPartsVisible>", effect, track).unwrap();
+fn write_parts_effect(
+    xml: &mut String,
+    effect: u32,
+    track: u32,
+    motion: &Motion3,
+    fade_in_time: Option<f32>,
+    fade_out_time: Option<f32>,
+) {
+    let curves = motion
+        .curves()
+        .iter()
+        .filter(|curve| curve.target() == "PartOpacity")
+        .collect::<Vec<_>>();
+    writeln!(xml, "<CMvEffect_Live2DPartsVisible xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:Live2DPartsOpacity\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, curves.len()).unwrap();
+    for (index, curve) in curves.iter().enumerate() {
+        write_attr(
+            xml,
+            effect * 10_000 + index as u32,
+            track,
+            curve,
+            motion.meta().fps(),
+            fade_in_time,
+            fade_out_time,
+        );
+    }
+    xml.push_str("</array><hash_map xs.n=\"attrMap\" count=\"");
+    write!(xml, "{}\">", curves.len()).unwrap();
+    for (index, curve) in curves.iter().enumerate() {
+        let id = effect * 10_000 + index as u32;
+        writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"live2DPartsOpacity:{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(curve.id()), id).unwrap();
+    }
+    writeln!(xml, "</hash_map><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect><carray_list xs.n=\"effectParameterAttrIds\" count=\"0\" /></CMvEffect_Live2DPartsVisible>", track).unwrap();
 }
 
 fn write_special_effects(xml: &mut String, eye: u32, lip: u32, track: u32, groups: &[Model3Group]) {
@@ -282,7 +353,31 @@ fn write_special_effects(xml: &mut String, eye: u32, lip: u32, track: u32, group
         } else {
             "CMvEffect_LipSync"
         };
-        writeln!(xml, "<{} xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:{}\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">true</b><array xs.n=\"attrList\" count=\"0\" type=\"ICMvAttr\" /><hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" /><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect><carray_list xs.n=\"effectParameterAttrIds\" count=\"{}\">", kind, id, target, track, ids.len()).unwrap();
+        writeln!(xml, "<{} xs.id=\"#{}\">", kind, id).unwrap();
+        xml.push_str("<ICMvEffect xs.n=\"super\">\n");
+        writeln!(
+            xml,
+            "  <CEffectId xs.n=\"id\" idstr=\"Effects:{}\" />",
+            target
+        )
+        .unwrap();
+        xml.push_str("  <b xs.n=\"isActive\">true</b>\n");
+        xml.push_str("  <b xs.n=\"canDelete\">true</b>\n");
+        xml.push_str("  <array xs.n=\"attrList\" count=\"0\" type=\"ICMvAttr\" />\n");
+        xml.push_str("  <hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" />\n");
+        writeln!(
+            xml,
+            "  <CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" />",
+            track
+        )
+        .unwrap();
+        xml.push_str("</ICMvEffect>\n");
+        writeln!(
+            xml,
+            "<carray_list xs.n=\"effectParameterAttrIds\" count=\"{}\">",
+            ids.len()
+        )
+        .unwrap();
         for parameter in ids {
             writeln!(
                 xml,
@@ -291,7 +386,8 @@ fn write_special_effects(xml: &mut String, eye: u32, lip: u32, track: u32, group
             )
             .unwrap();
         }
-        writeln!(xml, "</carray_list></{}>", kind).unwrap();
+        xml.push_str("</carray_list>\n");
+        writeln!(xml, "</{}>", kind).unwrap();
     }
 }
 

@@ -2,13 +2,13 @@ use std::path::Path;
 
 use quick_xml::escape::escape;
 
+use crate::model3::Model3Group;
 use crate::{
     Error, Result,
     caff::{ArchiveEntry, Compression, decode_archive, encode_archive},
 };
-use crate::{model3::Model3Group, motion3::Motion3};
 
-use super::generator;
+use super::generator::{self, MotionInstance};
 
 /// A decoded Cubism `.can3` animation project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,7 +31,7 @@ impl Can3Project {
     pub(crate) fn from_model3(
         animation_name: &str,
         model_path: &str,
-        motions: &[(String, Motion3)],
+        motions: &[MotionInstance],
         groups: &[Model3Group],
     ) -> Result<Self> {
         Ok(Self {

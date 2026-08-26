@@ -190,7 +190,12 @@ pub fn decompile_model3_to_files(
                 source,
             })?;
             let motion = Motion3::from_json_bytes(&bytes)?;
-            motions.push((format!("{group}_{index}"), motion));
+            motions.push(crate::can3::MotionInstance {
+                name: format!("{group}_{index}"),
+                motion,
+                fade_in_time: entry.fade_in_time,
+                fade_out_time: entry.fade_out_time,
+            });
         }
     }
     let model_file_name = cmo3_path

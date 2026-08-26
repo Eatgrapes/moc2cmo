@@ -3,4 +3,5 @@
 mod generator;
 mod project;
 
+pub(crate) use generator::MotionInstance;
 pub use project::Can3Project;
