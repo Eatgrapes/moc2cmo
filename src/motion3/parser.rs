@@ -89,7 +89,19 @@ fn validate_metadata(
         .sum::<usize>();
     let point_count = curves
         .iter()
-        .map(|curve| curve.segments().len() + 1)
+        .map(|curve| {
+            1 + curve
+                .segments()
+                .iter()
+                .map(|segment| {
+                    usize::from(matches!(
+                        segment,
+                        super::types::MotionSegment::Bezier { .. }
+                    )) * 2
+                        + 1
+                })
+                .sum::<usize>()
+        })
         .sum::<usize>();
     if meta.curve_count != 0 && meta.curve_count as usize != curves.len() {
         return Err(invalid("Meta.CurveCount does not match Curves"));

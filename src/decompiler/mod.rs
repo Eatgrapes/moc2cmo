@@ -5,8 +5,8 @@ mod xml;
 use std::path::Path;
 
 use crate::{
-    Error, Result, can3::Can3Project, cmo3::Cmo3Project, moc3::Moc3Model, model3::Model3,
-    motion3::Motion3,
+    Error, Result, can3::Can3Project, cmo3::Cmo3Project, expression3::Expression3, moc3::Moc3Model,
+    model3::Model3, motion3::Motion3, physics3::Physics3, pose3::Pose3,
 };
 
 pub use texture::Texture;
@@ -157,6 +157,43 @@ pub fn decompile_model3_to_files(
         path: moc3_path.clone(),
         source,
     })?;
+
+    for path in [
+        references.physics.clone(),
+        references.pose.clone(),
+        references.user_data.clone(),
+        references.display_info.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let path = base_directory.join(path);
+        let bytes = std::fs::read(&path).map_err(|source| Error::Io {
+            path: path.clone(),
+            source,
+        })?;
+        let path_text = path.to_string_lossy();
+        if path_text.ends_with(".physics3.json") {
+            Physics3::from_json_bytes(&bytes)?;
+        } else if path_text.ends_with(".pose3.json") {
+            Pose3::from_json_bytes(&bytes)?;
+        } else {
+            let _ = serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|error| {
+                Error::InvalidJson {
+                    format: "model3 auxiliary JSON",
+                    message: error.to_string(),
+                }
+            })?;
+        }
+    }
+    for expression in &references.expressions {
+        let path = base_directory.join(&expression.file);
+        let bytes = std::fs::read(&path).map_err(|source| Error::Io {
+            path: path.clone(),
+            source,
+        })?;
+        Expression3::from_json_bytes(&bytes)?;
+    }
 
     let mut decompiler = Decompiler::new();
     let model_name = model3_path

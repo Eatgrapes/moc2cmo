@@ -264,8 +264,14 @@ fn write_attr(
         curve_key(curve)
     };
     let points = curve_points(curve, fps);
-    let fade_in = fade_in_time.map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
-    let fade_out = fade_out_time.map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
+    let fade_in = curve
+        .fade_in_time()
+        .or(fade_in_time)
+        .map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
+    let fade_out = curve
+        .fade_out_time()
+        .or(fade_out_time)
+        .map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
     writeln!(xml, "<CMvAttrF xs.id=\"#{}\"><ICMvAttr xs.n=\"super\"><b xs.n=\"isShyMode\">false</b><CAttrId xs.n=\"id\" idstr=\"{}\" /><s xs.n=\"name\">{}</s><b xs.n=\"isActive\">true</b><hash_map xs.n=\"optionParam\" count=\"3\" keyType=\"string\"><i xs.n=\"KEY_ATTR_FADE_OUT\">{}</i><i xs.n=\"KEY_ATTR_FADE_IN\">{}</i><s xs.n=\"KEY_PARAM_ID\">{}</s></hash_map><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvAttr><CMutableSequence xs.n=\"valueData\"><ACValueSequence xs.n=\"super\"><d xs.n=\"curMin\">{}</d><d xs.n=\"curMax\">{}</d><i xs.n=\"posStart\">0</i><d xs.n=\"baseValue\">{}</d></ACValueSequence><array xs.n=\"points\" count=\"{}\" type=\"CBezierPt\">", id, escape(&attr_id), escape(curve.id()), fade_out, fade_in, escape(&attr_id), track, points.iter().map(|p| p.value).fold(f32::INFINITY, f32::min), points.iter().map(|p| p.value).fold(f32::NEG_INFINITY, f32::max), curve.first_point().value, points.len()).unwrap();
     for point in &points {
         writeln!(xml, "<CBezierPt><CSeqPt xs.n=\"anchor\"><b xs.n=\"isCorner\">false</b><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d></CSeqPt><CBezierCtrlPt xs.n=\"next\"><f xs.n=\"posF\">{}</f><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d><b xs.n=\"isPosOptimized\">false</b></CBezierCtrlPt><CBezierCtrlPt xs.n=\"prev\"><f xs.n=\"posF\">{}</f><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d><b xs.n=\"isPosOptimized\">false</b></CBezierCtrlPt></CBezierPt>", point.frame, point.value, point.next.time, frame(point.next, fps), point.next.value, point.prev.time, frame(point.prev, fps), point.prev.value).unwrap();
