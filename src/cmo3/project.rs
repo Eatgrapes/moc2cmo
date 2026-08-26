@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use quick_xml::Reader;
+
 use crate::{Error, Result};
 
 use crate::caff::{ArchiveEntry, Compression, encode_archive};
@@ -54,11 +56,28 @@ impl Cmo3Project {
         &self.main_xml
     }
 
+    /// Validates the project's UTF-8 XML document.
+    pub fn validate_xml(&self) -> Result<()> {
+        let mut reader = Reader::from_reader(self.main_xml.as_slice());
+        let mut buffer = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buffer) {
+                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(_) => buffer.clear(),
+                Err(error) => {
+                    return Err(Error::InvalidCmo3(format!("main.xml is invalid: {error}")));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Encodes the project as a complete `.cmo3` byte buffer.
     pub fn encode(&self) -> Result<Vec<u8>> {
         if self.main_xml.is_empty() {
             return Err(Error::InvalidCmo3("main.xml is empty".into()));
         }
+        self.validate_xml()?;
 
         let mut entries = Vec::with_capacity(self.resources.len() + 1);
         for resource in &self.resources {

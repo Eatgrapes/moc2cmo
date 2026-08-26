@@ -18,6 +18,7 @@ pub mod pose3;
 pub mod userdata3;
 
 pub use decompiler::{
-    Decompiler, Texture, decompile, decompile_model3_to_files, decompile_to_file,
+    Decompiler, Model3Decompilation, Texture, decompile, decompile_model3,
+    decompile_model3_to_files, decompile_to_file,
 };
 pub use error::{Error, Result};

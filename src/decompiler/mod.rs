@@ -131,6 +131,30 @@ pub fn decompile_to_file(moc3: &[u8], path: impl AsRef<Path>) -> Result<()> {
     Decompiler::new().decompile_to_file(moc3, path)
 }
 
+/// The in-memory projects produced from one `model3.json` manifest.
+#[derive(Debug, Clone)]
+pub struct Model3Decompilation {
+    /// Manifest file stem used for generated filenames.
+    pub model_name: String,
+    /// Generated editable CMO3 project, including referenced JSON resources.
+    pub cmo3: Cmo3Project,
+    /// Generated editable CAN3 project, including referenced sound resources.
+    pub can3: Can3Project,
+}
+
+/// Reads a Cubism `model3.json` manifest and builds matching projects in memory.
+///
+/// All paths in the manifest are resolved relative to the manifest's directory.
+/// The returned projects can be encoded or written by the caller.
+///
+/// # Errors
+///
+/// Returns an error when a referenced model, texture, auxiliary JSON, motion,
+/// sound, or project resource cannot be read or parsed.
+pub fn decompile_model3(model3_path: impl AsRef<Path>) -> Result<Model3Decompilation> {
+    build_model3_projects(model3_path.as_ref())
+}
+
 /// Reads a Cubism `model3.json` manifest and writes matching CMO3 and CAN3 files.
 ///
 /// All paths in the manifest are resolved relative to the manifest's directory.
@@ -145,7 +169,21 @@ pub fn decompile_model3_to_files(
     model3_path: impl AsRef<Path>,
     output_directory: impl AsRef<Path>,
 ) -> Result<()> {
-    let model3_path = model3_path.as_ref();
+    let projects = decompile_model3(model3_path.as_ref())?;
+    let output_directory = output_directory.as_ref();
+    std::fs::create_dir_all(output_directory).map_err(|source| Error::Io {
+        path: output_directory.to_path_buf(),
+        source,
+    })?;
+    projects
+        .cmo3
+        .write_to(output_directory.join(format!("{}.cmo3", projects.model_name)))?;
+    projects
+        .can3
+        .write_to(output_directory.join(format!("{}.can3", projects.model_name)))
+}
+
+fn build_model3_projects(model3_path: &Path) -> Result<Model3Decompilation> {
     let base_directory = model3_path.parent().unwrap_or_else(|| Path::new("."));
     let manifest_bytes = std::fs::read(model3_path).map_err(|source| Error::Io {
         path: model3_path.to_path_buf(),
@@ -215,12 +253,6 @@ pub fn decompile_model3_to_files(
         decompiler.push_texture(Texture::from_png(bytes)?);
     }
 
-    let output_directory = output_directory.as_ref();
-    std::fs::create_dir_all(output_directory).map_err(|source| Error::Io {
-        path: output_directory.to_path_buf(),
-        source,
-    })?;
-    let cmo3_path = output_directory.join(format!("{model_name}.cmo3"));
     let mut cmo3 = decompiler.decompile_project(&moc3)?;
     cmo3.insert_resource("moc2cmo.model3.json", manifest_bytes);
     for resource in referenced_json_paths(references) {
@@ -231,8 +263,6 @@ pub fn decompile_model3_to_files(
         })?;
         cmo3.insert_resource(resource, bytes);
     }
-    cmo3.write_to(&cmo3_path)?;
-
     let mut motions = Vec::new();
     for (group, entries) in &references.motions {
         for (index, entry) in entries.iter().enumerate() {
@@ -250,12 +280,9 @@ pub fn decompile_model3_to_files(
             });
         }
     }
-    let model_file_name = cmo3_path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("model.cmo3");
+    let model_file_name = format!("{model_name}.cmo3");
     let mut can3 =
-        Can3Project::from_model3(model_name, model_file_name, &motions, manifest.groups())?;
+        Can3Project::from_model3(model_name, &model_file_name, &motions, manifest.groups())?;
     for entries in references.motions.values() {
         for entry in entries {
             if let Some(sound) = &entry.sound {
@@ -268,7 +295,11 @@ pub fn decompile_model3_to_files(
             }
         }
     }
-    can3.write_to(output_directory.join(format!("{model_name}.can3")))
+    Ok(Model3Decompilation {
+        model_name: model_name.to_owned(),
+        cmo3,
+        can3,
+    })
 }
 
 fn referenced_json_paths(references: &crate::model3::Model3References) -> Vec<String> {
