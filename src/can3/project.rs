@@ -34,8 +34,10 @@ impl Can3Project {
         motions: &[MotionInstance],
         groups: &[Model3Group],
     ) -> Result<Self> {
+        let main_xml = generator::generate(animation_name, model_path, motions, groups)?;
+        validate_xml(&main_xml)?;
         Ok(Self {
-            main_xml: generator::generate(animation_name, model_path, motions, groups)?,
+            main_xml,
             resources: Vec::new(),
             obfuscation_key: 42,
         })
@@ -97,6 +99,7 @@ impl Can3Project {
         let main_xml = main_xml.ok_or_else(|| Error::InvalidCan3("main.xml is missing".into()))?;
         std::str::from_utf8(&main_xml)
             .map_err(|_| Error::InvalidCan3("main.xml is not UTF-8".into()))?;
+        validate_xml(&main_xml)?;
         Ok(Self {
             main_xml,
             resources,
@@ -107,6 +110,11 @@ impl Can3Project {
     /// Returns the decoded animation XML.
     pub fn main_xml(&self) -> &[u8] {
         &self.main_xml
+    }
+
+    /// Validates the project's UTF-8 XML document.
+    pub fn validate_xml(&self) -> Result<()> {
+        validate_xml(&self.main_xml)
     }
 
     /// Returns the signed CAFF XOR key used when encoding.
@@ -212,6 +220,22 @@ fn validate_resource_path(path: &str) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+fn validate_xml(bytes: &[u8]) -> Result<()> {
+    let mut reader = quick_xml::Reader::from_reader(bytes);
+    let mut buffer = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(quick_xml::events::Event::Eof) => return Ok(()),
+            Ok(_) => buffer.clear(),
+            Err(error) => {
+                return Err(Error::InvalidCan3(format!(
+                    "main.xml is not well-formed: {error}"
+                )));
+            }
+        }
+    }
 }
 
 fn replace_text_element(block: &str, tag: &str, name: &str, value: &str) -> Result<String> {
