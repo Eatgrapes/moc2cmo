@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use super::xml::{XmlWriter, attr};
+use super::xml::{IMPORTS, XmlWriter, attr};
 use crate::{
     Error, Result,
     model3::Model3Group,
@@ -181,6 +181,11 @@ struct FadeTimes {
 
 fn write_header(xml: &mut String) {
     xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<?version CSceneSource:3?>\n<?version CAnimation:4?>\n<?version CMvParameter_Group:1?>\n<?version SerializeFormatVersion:2?>\n<?version CMvMovieInfo:3?>\n<?version CBezierCtrlPt:2?>\n");
+    for import in IMPORTS {
+        xml.push_str("<?import ");
+        xml.push_str(import);
+        xml.push_str("?>\n");
+    }
 }
 
 fn ref_id(id: u32) -> String {
@@ -220,6 +225,18 @@ fn write_group_track(xml: &mut String, group: u32, scene: u32, guid: u32, track:
     ] {
         xml.text("b", &[attr("xs.n", name)], value);
     }
+    xml.start("CVisualHandler", &[attr("xs.n", "visualHandler")]);
+    xml.empty(
+        "CMvTrack_Group_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(group))],
+    );
+    xml.end("CVisualHandler");
+    xml.start("CSoundHandler", &[attr("xs.n", "soundHandler")]);
+    xml.empty(
+        "CMvTrack_Group_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(group))],
+    );
+    xml.end("CSoundHandler");
     xml.empty("null", &[attr("xs.n", "soundEffect")]);
     xml.empty("null", &[attr("xs.n", "visualEffect")]);
     xml.start("CMvEffectManager", &[attr("xs.n", "effectManager")]);
@@ -404,6 +421,18 @@ fn write_model_track(
     ] {
         writer.text("b", &[attr("xs.n", name)], value);
     }
+    writer.start("CVisualHandler", &[attr("xs.n", "visualHandler")]);
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(ids.track))],
+    );
+    writer.end("CVisualHandler");
+    writer.start("CSoundHandler", &[attr("xs.n", "soundHandler")]);
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(ids.track))],
+    );
+    writer.end("CSoundHandler");
     writer.empty("null", &[attr("xs.n", "soundEffect")]);
     writer.start("CMvEffectManager", &[attr("xs.n", "effectManager")]);
     writer.start(
@@ -447,6 +476,7 @@ fn write_model_track(
             attr("keyType", "string"),
         ],
     );
+    writer.empty("null", &[attr("xs.n", "keys")]);
     writer.end("ICMvTrack_Source");
     writer.empty(
         "CResourceGuid",
@@ -473,6 +503,31 @@ fn write_model_track(
         writer.empty(tag, &[attr("xs.n", name), attr("xs.ref", ref_id(id))]);
     }
     writer.empty("null", &[attr("xs.n", "formEditEffect")]);
+    writer.start("FormAnimationSet", &[attr("xs.n", "formAnimationSet")]);
+    writer.empty(
+        "hash_map",
+        &[
+            attr("xs.n", "formMapOnGlobal"),
+            attr("count", 0),
+            attr("keyType", "string"),
+        ],
+    );
+    writer.empty(
+        "hash_map",
+        &[
+            attr("xs.n", "formMapOnLocal"),
+            attr("count", 0),
+            attr("keyType", "string"),
+        ],
+    );
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[
+            attr("xs.n", "trackSource"),
+            attr("xs.ref", ref_id(ids.track)),
+        ],
+    );
+    writer.end("FormAnimationSet");
     write_bounds(&mut writer, "bounds", 640.0, 1100.0);
     writer.end("CMvTrack_Live2DModel_Source");
     writer.empty(
