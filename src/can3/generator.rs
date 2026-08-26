@@ -140,13 +140,13 @@ fn write_parameter_effect(
     track: u32,
     motion: &Motion3,
 ) -> Result<()> {
-    writeln!(xml, "<CMvEffect_Live2DParameter xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:Live2DParam\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, motion.curves().iter().filter(|c| c.target() == "Parameter").count()).unwrap();
-    for (index, curve) in motion
+    let curves = motion
         .curves()
         .iter()
-        .filter(|c| c.target() == "Parameter")
-        .enumerate()
-    {
+        .filter(|curve| curve.target() == "Parameter")
+        .collect::<Vec<_>>();
+    writeln!(xml, "<CMvEffect_Live2DParameter xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:Live2DParam\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, curves.len()).unwrap();
+    for (index, curve) in curves.iter().enumerate() {
         write_attr(
             xml,
             effect * 10_000 + index as u32,
@@ -155,7 +155,13 @@ fn write_parameter_effect(
             motion.meta().fps(),
         );
     }
-    xml.push_str("</array><hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" />");
+    xml.push_str("</array><hash_map xs.n=\"attrMap\" count=\"");
+    write!(xml, "{}\">", curves.len()).unwrap();
+    for (index, curve) in curves.iter().enumerate() {
+        let id = effect * 10_000 + index as u32;
+        writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"live2dParam_{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(curve.id()), id).unwrap();
+    }
+    xml.push_str("</hash_map>");
     writeln!(xml, "<CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect></CMvEffect_Live2DParameter>", track).unwrap();
     Ok(())
 }
@@ -171,7 +177,23 @@ fn write_attr(xml: &mut String, id: u32, track: u32, curve: &MotionCurve, fps: f
     for (frame, value, _, _) in &points {
         writeln!(xml, "<CBezierPt><CSeqPt xs.n=\"anchor\"><b xs.n=\"isCorner\">false</b><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d></CSeqPt></CBezierPt>", frame, value).unwrap();
     }
-    xml.push_str("</array><carray_list xs.n=\"curveTypes\" count=\"0\" /><d xs.n=\"rangeMin\">-Infinity</d><d xs.n=\"rangeMax\">Infinity</d><b xs.n=\"isRepeat\">false</b></CMutableSequence></CMvAttrF>");
+    writeln!(
+        xml,
+        "</array><carray_list xs.n=\"curveTypes\" count=\"{}\">",
+        points.len().saturating_sub(1)
+    )
+    .unwrap();
+    for point in points.iter().skip(1) {
+        let curve_type = match point.2 {
+            "LINEAR" => "LINEAR",
+            "BEZIER" => "BEZIER",
+            "STEP" => "STEP",
+            "INVERSE_STEP" => "INVERSE_STEP",
+            _ => "SMOOTH",
+        };
+        writeln!(xml, "<CCurveType v=\"{}\" />", curve_type).unwrap();
+    }
+    xml.push_str("</carray_list><d xs.n=\"rangeMin\">-Infinity</d><d xs.n=\"rangeMax\">Infinity</d><b xs.n=\"isRepeat\">false</b></CMutableSequence></CMvAttrF>");
 }
 
 fn curve_points(
