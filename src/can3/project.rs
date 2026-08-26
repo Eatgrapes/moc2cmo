@@ -28,7 +28,11 @@ struct AnimationResource {
 
 impl Can3Project {
     /// Creates a CAN3 project from a model manifest's motions and groups.
-    pub(crate) fn from_model3(
+    /// Builds a CAN3 project from parsed motions and model parameter groups.
+    ///
+    /// `model_path` is the archive-relative CMO3 filename referenced by the
+    /// generated model track. Each motion becomes one editable scene.
+    pub fn from_model3(
         animation_name: &str,
         model_path: &str,
         motions: &[MotionInstance],

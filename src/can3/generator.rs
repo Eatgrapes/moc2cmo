@@ -1,8 +1,6 @@
-use std::fmt::Write;
-
-use quick_xml::escape::escape;
 use uuid::Uuid;
 
+use super::xml::{XmlWriter, attr};
 use crate::{
     Error, Result,
     model3::Model3Group,
@@ -130,24 +128,101 @@ pub(crate) fn generate(
         model_path,
     );
     xml.push_str("</shared><main>");
-    writeln!(xml, "<CAnimation xs.ref=\"#{}\" />", animation).unwrap();
+    let mut writer = XmlWriter::new(&mut xml);
+    writer.empty("CAnimation", &[attr("xs.ref", ref_id(animation))]);
     xml.push_str("</main></root>");
     Ok(xml.into_bytes())
 }
 
-pub(crate) struct MotionInstance {
-    pub(crate) name: String,
-    pub(crate) motion: Motion3,
-    pub(crate) fade_in_time: Option<f32>,
-    pub(crate) fade_out_time: Option<f32>,
+/// One parsed motion and its optional manifest fade settings.
+#[derive(Debug, Clone)]
+pub struct MotionInstance {
+    /// Name used for the generated scene.
+    pub name: String,
+    /// Parsed motion data.
+    pub motion: Motion3,
+    /// Optional fade-in duration in seconds.
+    pub fade_in_time: Option<f32>,
+    /// Optional fade-out duration in seconds.
+    pub fade_out_time: Option<f32>,
 }
 
 fn write_header(xml: &mut String) {
     xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<?version CSceneSource:3?>\n<?version CAnimation:4?>\n<?version CMvParameter_Group:1?>\n<?version SerializeFormatVersion:2?>\n<?version CMvMovieInfo:3?>\n<?version CBezierCtrlPt:2?>\n");
 }
 
+fn ref_id(id: u32) -> String {
+    format!("#{id}")
+}
+
+fn reference(xml: &mut XmlWriter<'_>, tag: &str, name: &str, id: u32) {
+    xml.empty(tag, &[attr("xs.n", name), attr("xs.ref", ref_id(id))]);
+}
+
+fn write_bounds(xml: &mut XmlWriter<'_>, name: &str, width: f32, height: f32) {
+    xml.start("GRectF", &[attr("xs.n", name)]);
+    xml.text("f", &[attr("xs.n", "x")], 0);
+    xml.text("f", &[attr("xs.n", "y")], 0);
+    xml.text("f", &[attr("xs.n", "width")], width);
+    xml.text("f", &[attr("xs.n", "height")], height);
+    xml.end("GRectF");
+}
+
 fn write_group_track(xml: &mut String, group: u32, scene: u32, guid: u32, track: u32) {
-    writeln!(xml, "<CMvTrack_Group_Source xs.id=\"#{}\"><ICMvTrack_Source xs.n=\"super\"><s xs.n=\"name\">Root</s><b xs.n=\"isUserRenamed\">false</b><CTrackGuid xs.n=\"guid\" xs.ref=\"#{}\" /><i xs.n=\"start\">0</i><i xs.n=\"internalOffset\">0</i><i xs.n=\"duration\">0</i><b xs.n=\"editable\">true</b><b xs.n=\"visible\">true</b><b xs.n=\"mute\">false</b><b xs.n=\"isGuide\">false</b><b xs.n=\"isRepeat\">false</b><b xs.n=\"soloSwitch\">false</b><null xs.n=\"soundEffect\" /><null xs.n=\"visualEffect\" /><CMvEffectManager xs.n=\"effectManager\"><array xs.n=\"effectList\" count=\"0\" type=\"ICMvEffect\" /></CMvEffectManager><null xs.n=\"parentGuid\" /><CSceneSource xs.n=\"_sceneSource\" xs.ref=\"#{}\" /><hash_map xs.n=\"userData\" count=\"0\" keyType=\"string\" /></ICMvTrack_Source><carray_list xs.n=\"_childTrackGuids\" count=\"1\"><CTrackGuid xs.ref=\"#{}\" /></carray_list><GRectF xs.n=\"bounds\"><f xs.n=\"x\">0.0</f><f xs.n=\"y\">0.0</f><f xs.n=\"width\">640.0</f><f xs.n=\"height\">480.0</f></GRectF></CMvTrack_Group_Source><CTrackGuid uuid=\"{}\" xs.id=\"#{}\" />", group, guid, scene, track, Uuid::new_v4(), guid).unwrap();
+    let mut xml = XmlWriter::new(xml);
+    xml.start("CMvTrack_Group_Source", &[attr("xs.id", ref_id(group))]);
+    xml.start("ICMvTrack_Source", &[attr("xs.n", "super")]);
+    xml.text("s", &[attr("xs.n", "name")], "Root");
+    xml.text("b", &[attr("xs.n", "isUserRenamed")], false);
+    reference(&mut xml, "CTrackGuid", "guid", guid);
+    for name in ["start", "internalOffset", "duration"] {
+        xml.text("i", &[attr("xs.n", name)], 0);
+    }
+    for (name, value) in [
+        ("editable", true),
+        ("visible", true),
+        ("mute", false),
+        ("isGuide", false),
+        ("isRepeat", false),
+        ("soloSwitch", false),
+    ] {
+        xml.text("b", &[attr("xs.n", name)], value);
+    }
+    xml.empty("null", &[attr("xs.n", "soundEffect")]);
+    xml.empty("null", &[attr("xs.n", "visualEffect")]);
+    xml.start("CMvEffectManager", &[attr("xs.n", "effectManager")]);
+    xml.empty(
+        "array",
+        &[
+            attr("xs.n", "effectList"),
+            attr("count", 0),
+            attr("type", "ICMvEffect"),
+        ],
+    );
+    xml.end("CMvEffectManager");
+    xml.empty("null", &[attr("xs.n", "parentGuid")]);
+    reference(&mut xml, "CSceneSource", "_sceneSource", scene);
+    xml.empty(
+        "hash_map",
+        &[
+            attr("xs.n", "userData"),
+            attr("count", 0),
+            attr("keyType", "string"),
+        ],
+    );
+    xml.end("ICMvTrack_Source");
+    xml.start(
+        "carray_list",
+        &[attr("xs.n", "_childTrackGuids"), attr("count", 1)],
+    );
+    xml.empty("CTrackGuid", &[attr("xs.ref", ref_id(track))]);
+    xml.end("carray_list");
+    write_bounds(&mut xml, "bounds", 640.0, 480.0);
+    xml.end("CMvTrack_Group_Source");
+    xml.empty(
+        "CTrackGuid",
+        &[attr("uuid", Uuid::new_v4()), attr("xs.id", ref_id(guid))],
+    );
 }
 
 fn write_scene(
@@ -162,30 +237,103 @@ fn write_scene(
     let frames = (motion.meta().duration() * motion.meta().fps())
         .ceil()
         .max(1.0) as u32;
-    writeln!(xml, "<CSceneSource xs.id=\"#{}\"><s xs.n=\"sceneName\">{}</s><CImageCanvas xs.n=\"canvas\"><i xs.n=\"pixelWidth\">320</i><i xs.n=\"pixelHeight\">240</i><CColor xs.n=\"background\" /></CImageCanvas><CSceneGuid xs.n=\"guid\" xs.ref=\"#{}\" /><s xs.n=\"tag\" /><CTrackSourceSet xs.n=\"trackSourceSet\"><carray_list xs.n=\"_sources\" count=\"2\"><CMvTrack_Group_Source xs.ref=\"#{}\" /><CMvTrack_Live2DModel_Source xs.ref=\"#{}\" /></carray_list></CTrackSourceSet><CMvTrack_Group_Source xs.n=\"rootTrack\" xs.ref=\"#{}\" /><CMvMovieInfo xs.n=\"movieInfo\"><i xs.n=\"width\">320</i><i xs.n=\"height\">240</i><i xs.n=\"duration\">{}</i><d xs.n=\"fps\">{}</d><i xs.n=\"workspaceStart\">0</i><i xs.n=\"workspaceEnd\">{}</i><CColor xs.n=\"background\" /><i xs.n=\"fadeInMSec\">-1</i><i xs.n=\"fadeOutMSec\">-1</i><b xs.n=\"isBezierRestricted\">{}</b><b xs.n=\"isLoopMotion\">{}</b><i xs.n=\"startFrame\">0</i><CFrameIndexType xs.n=\"frameIndexType\" v=\"ZERO_INDEX\" /></CMvMovieInfo>", scene, escape(name), scene_guid, group, track, group, frames + 1, motion.meta().fps(), frames, motion.meta().are_beziers_restricted(), motion.meta().is_looping()).unwrap();
-    writeln!(
-        xml,
-        "<hash_map xs.n=\"marker\" count=\"{}\" keyType=\"string\">",
-        motion.user_data().len()
-    )
-    .unwrap();
-    for event in motion.user_data() {
-        writeln!(
-            xml,
-            "<entry><s xs.n=\"key\">{}</s><s xs.n=\"value\">{}</s></entry>",
-            event.time,
-            escape(&event.value)
-        )
-        .unwrap();
+    let mut xml = XmlWriter::new(xml);
+    xml.start("CSceneSource", &[attr("xs.id", ref_id(scene))]);
+    xml.text("s", &[attr("xs.n", "sceneName")], name);
+    xml.start("CImageCanvas", &[attr("xs.n", "canvas")]);
+    xml.text("i", &[attr("xs.n", "pixelWidth")], 320);
+    xml.text("i", &[attr("xs.n", "pixelHeight")], 240);
+    xml.empty("CColor", &[attr("xs.n", "background")]);
+    xml.end("CImageCanvas");
+    reference(&mut xml, "CSceneGuid", "guid", scene_guid);
+    xml.empty("s", &[attr("xs.n", "tag")]);
+    xml.start("CTrackSourceSet", &[attr("xs.n", "trackSourceSet")]);
+    xml.start("carray_list", &[attr("xs.n", "_sources"), attr("count", 2)]);
+    xml.empty("CMvTrack_Group_Source", &[attr("xs.ref", ref_id(group))]);
+    xml.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.ref", ref_id(track))],
+    );
+    xml.end("carray_list");
+    xml.end("CTrackSourceSet");
+    reference(&mut xml, "CMvTrack_Group_Source", "rootTrack", group);
+    xml.start("CMvMovieInfo", &[attr("xs.n", "movieInfo")]);
+    for (name, value) in [
+        ("width", 320),
+        ("height", 240),
+        ("duration", frames + 1),
+        ("workspaceStart", 0),
+        ("workspaceEnd", frames),
+        ("fadeInMSec", u32::MAX),
+        ("fadeOutMSec", u32::MAX),
+        ("startFrame", 0),
+    ] {
+        xml.text(
+            "i",
+            &[attr("xs.n", name)],
+            if value == u32::MAX {
+                "-1".into()
+            } else {
+                value.to_string()
+            },
+        );
     }
-    xml.push_str("</hash_map><CCurveType xs.n=\"defaultParameterCurveType\" v=\"SMOOTH\" /><CCurveType xs.n=\"defaultPartCurveType\" v=\"STEP\" /><b xs.n=\"fixAspect\">true</b><Animation xs.n=\"targetVersion\" v=\"FOR_SDK\" /></CSceneSource>");
-    writeln!(
-        xml,
-        "<CSceneGuid uuid=\"{}\" xs.id=\"#{}\" />",
-        Uuid::new_v4(),
-        scene_guid
-    )
-    .unwrap();
+    xml.text("d", &[attr("xs.n", "fps")], motion.meta().fps());
+    xml.empty("CColor", &[attr("xs.n", "background")]);
+    xml.text(
+        "b",
+        &[attr("xs.n", "isBezierRestricted")],
+        motion.meta().are_beziers_restricted(),
+    );
+    xml.text(
+        "b",
+        &[attr("xs.n", "isLoopMotion")],
+        motion.meta().is_looping(),
+    );
+    xml.empty(
+        "CFrameIndexType",
+        &[attr("xs.n", "frameIndexType"), attr("v", "ZERO_INDEX")],
+    );
+    xml.end("CMvMovieInfo");
+    xml.start(
+        "hash_map",
+        &[
+            attr("xs.n", "marker"),
+            attr("count", motion.user_data().len()),
+            attr("keyType", "string"),
+        ],
+    );
+    for event in motion.user_data() {
+        xml.start("entry", &[]);
+        xml.text("s", &[attr("xs.n", "key")], event.time);
+        xml.text("s", &[attr("xs.n", "value")], &event.value);
+        xml.end("entry");
+    }
+    xml.end("hash_map");
+    xml.empty(
+        "CCurveType",
+        &[
+            attr("xs.n", "defaultParameterCurveType"),
+            attr("v", "SMOOTH"),
+        ],
+    );
+    xml.empty(
+        "CCurveType",
+        &[attr("xs.n", "defaultPartCurveType"), attr("v", "STEP")],
+    );
+    xml.text("b", &[attr("xs.n", "fixAspect")], true);
+    xml.empty(
+        "Animation",
+        &[attr("xs.n", "targetVersion"), attr("v", "FOR_SDK")],
+    );
+    xml.end("CSceneSource");
+    xml.empty(
+        "CSceneGuid",
+        &[
+            attr("uuid", Uuid::new_v4()),
+            attr("xs.id", ref_id(scene_guid)),
+        ],
+    );
 }
 
 fn write_model_track(
@@ -208,7 +356,104 @@ fn write_model_track(
     let duration = (motion.meta().duration() * motion.meta().fps())
         .ceil()
         .max(1.0) as u32;
-    writeln!(xml, "<CMvTrack_Live2DModel_Source xs.id=\"#{}\"><ICMvTrack_Linked xs.n=\"super\"><ICMvTrack_Source xs.n=\"super\"><s xs.n=\"name\">Model</s><b xs.n=\"isUserRenamed\">true</b><CTrackGuid xs.n=\"guid\" xs.ref=\"#{}\" /><i xs.n=\"start\">0</i><i xs.n=\"internalOffset\">0</i><i xs.n=\"duration\">{}</i><b xs.n=\"editable\">true</b><b xs.n=\"visible\">true</b><b xs.n=\"mute\">false</b><b xs.n=\"isGuide\">false</b><b xs.n=\"isRepeat\">false</b><b xs.n=\"soloSwitch\">false</b><null xs.n=\"soundEffect\" /><CMvEffectManager xs.n=\"effectManager\"><array xs.n=\"effectList\" count=\"5\" type=\"ICMvEffect\"><CMvEffect_EyeBlink xs.ref=\"#{}\" /><CMvEffect_LipSync xs.ref=\"#{}\" /><CMvEffect_Live2DParameter xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.ref=\"#{}\" /><CMvEffect_VisualDefault xs.ref=\"#{}\" /></array></CMvEffectManager><CTrackGuid xs.n=\"parentGuid\" xs.ref=\"#{}\" /><CSceneSource xs.n=\"_sceneSource\" xs.ref=\"#{}\" /><hash_map xs.n=\"userData\" count=\"0\" keyType=\"string\" /></ICMvTrack_Source><CResourceGuid xs.n=\"_resourceGuid\" xs.ref=\"#{}\" /></ICMvTrack_Linked><CMvEffect_Live2DParameter xs.n=\"keyParamEffect\" xs.ref=\"#{}\" /><CMvEffect_Live2DPartsVisible xs.n=\"partsVisibleEffect\" xs.ref=\"#{}\" /><CMvEffect_VisualDefault xs.n=\"visualEffect\" xs.ref=\"#{}\" /><CMvEffect_EyeBlink xs.n=\"eyeBlinkEffect\" xs.ref=\"#{}\" /><CMvEffect_LipSync xs.n=\"lipSyncEffect\" xs.ref=\"#{}\" /><null xs.n=\"formEditEffect\" /><GRectF xs.n=\"bounds\"><f xs.n=\"x\">0</f><f xs.n=\"y\">0</f><f xs.n=\"width\">640</f><f xs.n=\"height\">1100</f></GRectF></CMvTrack_Live2DModel_Source><CTrackGuid uuid=\"{}\" xs.id=\"#{}\" />", track, guid, duration, eye, lip, parameter, parts, visual, parent_guid, scene, resource, parameter, parts, visual, eye, lip, Uuid::new_v4(), guid).unwrap();
+    let mut writer = XmlWriter::new(xml);
+    writer.start(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.id", ref_id(track))],
+    );
+    writer.start("ICMvTrack_Linked", &[attr("xs.n", "super")]);
+    writer.start("ICMvTrack_Source", &[attr("xs.n", "super")]);
+    writer.text("s", &[attr("xs.n", "name")], "Model");
+    writer.text("b", &[attr("xs.n", "isUserRenamed")], true);
+    writer.empty(
+        "CTrackGuid",
+        &[attr("xs.n", "guid"), attr("xs.ref", ref_id(guid))],
+    );
+    writer.text("i", &[attr("xs.n", "start")], 0);
+    writer.text("i", &[attr("xs.n", "internalOffset")], 0);
+    writer.text("i", &[attr("xs.n", "duration")], duration);
+    for (name, value) in [
+        ("editable", true),
+        ("visible", true),
+        ("mute", false),
+        ("isGuide", false),
+        ("isRepeat", false),
+        ("soloSwitch", false),
+    ] {
+        writer.text("b", &[attr("xs.n", name)], value);
+    }
+    writer.empty("null", &[attr("xs.n", "soundEffect")]);
+    writer.start("CMvEffectManager", &[attr("xs.n", "effectManager")]);
+    writer.start(
+        "array",
+        &[
+            attr("xs.n", "effectList"),
+            attr("count", 5),
+            attr("type", "ICMvEffect"),
+        ],
+    );
+    for (tag, id) in [
+        ("CMvEffect_EyeBlink", eye),
+        ("CMvEffect_LipSync", lip),
+        ("CMvEffect_Live2DParameter", parameter),
+        ("CMvEffect_Live2DPartsVisible", parts),
+        ("CMvEffect_VisualDefault", visual),
+    ] {
+        writer.empty(tag, &[attr("xs.ref", ref_id(id))]);
+    }
+    writer.end("array");
+    writer.end("CMvEffectManager");
+    writer.empty(
+        "CTrackGuid",
+        &[
+            attr("xs.n", "parentGuid"),
+            attr("xs.ref", ref_id(parent_guid)),
+        ],
+    );
+    writer.empty(
+        "CSceneSource",
+        &[attr("xs.n", "_sceneSource"), attr("xs.ref", ref_id(scene))],
+    );
+    writer.empty(
+        "hash_map",
+        &[
+            attr("xs.n", "userData"),
+            attr("count", 0),
+            attr("keyType", "string"),
+        ],
+    );
+    writer.end("ICMvTrack_Source");
+    writer.empty(
+        "CResourceGuid",
+        &[
+            attr("xs.n", "_resourceGuid"),
+            attr("xs.ref", ref_id(resource)),
+        ],
+    );
+    writer.end("ICMvTrack_Linked");
+    for (name, id) in [
+        ("keyParamEffect", parameter),
+        ("partsVisibleEffect", parts),
+        ("visualEffect", visual),
+        ("eyeBlinkEffect", eye),
+        ("lipSyncEffect", lip),
+    ] {
+        let tag = match name {
+            "keyParamEffect" => "CMvEffect_Live2DParameter",
+            "partsVisibleEffect" => "CMvEffect_Live2DPartsVisible",
+            "visualEffect" => "CMvEffect_VisualDefault",
+            "eyeBlinkEffect" => "CMvEffect_EyeBlink",
+            _ => "CMvEffect_LipSync",
+        };
+        writer.empty(tag, &[attr("xs.n", name), attr("xs.ref", ref_id(id))]);
+    }
+    writer.empty("null", &[attr("xs.n", "formEditEffect")]);
+    write_bounds(&mut writer, "bounds", 640.0, 1100.0);
+    writer.end("CMvTrack_Live2DModel_Source");
+    writer.empty(
+        "CTrackGuid",
+        &[attr("uuid", Uuid::new_v4()), attr("xs.id", ref_id(guid))],
+    );
     let _ = (groups, fade_in_time, fade_out_time);
     Ok(())
 }
@@ -226,10 +471,15 @@ fn write_parameter_effect(
         .iter()
         .filter(|curve| curve.target() == "Parameter")
         .collect::<Vec<_>>();
-    writeln!(xml, "<CMvEffect_Live2DParameter xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:Live2DParam\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, curves.len()).unwrap();
+    let mut writer = XmlWriter::new(xml);
+    writer.start(
+        "CMvEffect_Live2DParameter",
+        &[attr("xs.id", ref_id(effect))],
+    );
+    write_effect_header(&mut writer, "Effects:Live2DParam", false, curves.len());
     for (index, curve) in curves.iter().enumerate() {
         write_attr(
-            xml,
+            &mut writer,
             effect * 10_000 + index as u32,
             track,
             curve,
@@ -238,19 +488,40 @@ fn write_parameter_effect(
             fade_out_time,
         );
     }
-    xml.push_str("</array><hash_map xs.n=\"attrMap\" count=\"");
-    write!(xml, "{}\">", curves.len()).unwrap();
+    writer.end("array");
+    writer.start(
+        "hash_map",
+        &[
+            attr("xs.n", "attrMap"),
+            attr("count", curves.len()),
+            attr("keyType", "string"),
+        ],
+    );
     for (index, curve) in curves.iter().enumerate() {
         let id = effect * 10_000 + index as u32;
-        writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(&curve_key(curve)), id).unwrap();
+        writer.start("entry", &[]);
+        writer.empty(
+            "CAttrId",
+            &[attr("xs.n", "key"), attr("idstr", curve_key(curve))],
+        );
+        writer.empty(
+            "CMvAttrF",
+            &[attr("xs.n", "value"), attr("xs.ref", ref_id(id))],
+        );
+        writer.end("entry");
     }
-    xml.push_str("</hash_map>");
-    writeln!(xml, "<CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect></CMvEffect_Live2DParameter>", track).unwrap();
+    writer.end("hash_map");
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(track))],
+    );
+    writer.end("ICMvEffect");
+    writer.end("CMvEffect_Live2DParameter");
     Ok(())
 }
 
 fn write_attr(
-    xml: &mut String,
+    writer: &mut XmlWriter<'_>,
     id: u32,
     track: u32,
     curve: &MotionCurve,
@@ -272,16 +543,74 @@ fn write_attr(
         .fade_out_time()
         .or(fade_out_time)
         .map_or(-1, |seconds| (seconds.max(0.0) * 1000.0).round() as i32);
-    writeln!(xml, "<CMvAttrF xs.id=\"#{}\"><ICMvAttr xs.n=\"super\"><b xs.n=\"isShyMode\">false</b><CAttrId xs.n=\"id\" idstr=\"{}\" /><s xs.n=\"name\">{}</s><b xs.n=\"isActive\">true</b><hash_map xs.n=\"optionParam\" count=\"3\" keyType=\"string\"><i xs.n=\"KEY_ATTR_FADE_OUT\">{}</i><i xs.n=\"KEY_ATTR_FADE_IN\">{}</i><s xs.n=\"KEY_PARAM_ID\">{}</s></hash_map><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvAttr><CMutableSequence xs.n=\"valueData\"><ACValueSequence xs.n=\"super\"><d xs.n=\"curMin\">{}</d><d xs.n=\"curMax\">{}</d><i xs.n=\"posStart\">0</i><d xs.n=\"baseValue\">{}</d></ACValueSequence><array xs.n=\"points\" count=\"{}\" type=\"CBezierPt\">", id, escape(&attr_id), escape(curve.id()), fade_out, fade_in, escape(&attr_id), track, points.iter().map(|p| p.value).fold(f32::INFINITY, f32::min), points.iter().map(|p| p.value).fold(f32::NEG_INFINITY, f32::max), curve.first_point().value, points.len()).unwrap();
+    writer.start("CMvAttrF", &[attr("xs.id", ref_id(id))]);
+    writer.start("ICMvAttr", &[attr("xs.n", "super")]);
+    writer.text("b", &[attr("xs.n", "isShyMode")], false);
+    writer.empty("CAttrId", &[attr("xs.n", "id"), attr("idstr", &attr_id)]);
+    writer.text("s", &[attr("xs.n", "name")], curve.id());
+    writer.text("b", &[attr("xs.n", "isActive")], true);
+    writer.start(
+        "hash_map",
+        &[
+            attr("xs.n", "optionParam"),
+            attr("count", 3),
+            attr("keyType", "string"),
+        ],
+    );
+    writer.text("i", &[attr("xs.n", "KEY_ATTR_FADE_OUT")], fade_out);
+    writer.text("i", &[attr("xs.n", "KEY_ATTR_FADE_IN")], fade_in);
+    writer.text("s", &[attr("xs.n", "KEY_PARAM_ID")], &attr_id);
+    writer.end("hash_map");
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(track))],
+    );
+    writer.end("ICMvAttr");
+    writer.start("CMutableSequence", &[attr("xs.n", "valueData")]);
+    writer.start("ACValueSequence", &[attr("xs.n", "super")]);
+    writer.text(
+        "d",
+        &[attr("xs.n", "curMin")],
+        points.iter().map(|p| p.value).fold(f32::INFINITY, f32::min),
+    );
+    writer.text(
+        "d",
+        &[attr("xs.n", "curMax")],
+        points
+            .iter()
+            .map(|p| p.value)
+            .fold(f32::NEG_INFINITY, f32::max),
+    );
+    writer.text("i", &[attr("xs.n", "posStart")], 0);
+    writer.text("d", &[attr("xs.n", "baseValue")], curve.first_point().value);
+    writer.end("ACValueSequence");
+    writer.start(
+        "array",
+        &[
+            attr("xs.n", "points"),
+            attr("count", points.len()),
+            attr("type", "CBezierPt"),
+        ],
+    );
     for point in &points {
-        writeln!(xml, "<CBezierPt><CSeqPt xs.n=\"anchor\"><b xs.n=\"isCorner\">false</b><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d></CSeqPt><CBezierCtrlPt xs.n=\"next\"><f xs.n=\"posF\">{}</f><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d><b xs.n=\"isPosOptimized\">false</b></CBezierCtrlPt><CBezierCtrlPt xs.n=\"prev\"><f xs.n=\"posF\">{}</f><i xs.n=\"pos\">{}</i><d xs.n=\"doubleValue\">{}</d><b xs.n=\"isPosOptimized\">false</b></CBezierCtrlPt></CBezierPt>", point.frame, point.value, point.next.time, frame(point.next, fps), point.next.value, point.prev.time, frame(point.prev, fps), point.prev.value).unwrap();
+        writer.start("CBezierPt", &[]);
+        writer.start("CSeqPt", &[attr("xs.n", "anchor")]);
+        writer.text("b", &[attr("xs.n", "isCorner")], false);
+        writer.text("i", &[attr("xs.n", "pos")], point.frame);
+        writer.text("d", &[attr("xs.n", "doubleValue")], point.value);
+        writer.end("CSeqPt");
+        write_control_point(writer, "next", point.next, fps);
+        write_control_point(writer, "prev", point.prev, fps);
+        writer.end("CBezierPt");
     }
-    writeln!(
-        xml,
-        "</array><carray_list xs.n=\"curveTypes\" count=\"{}\">",
-        points.len().saturating_sub(1)
-    )
-    .unwrap();
+    writer.end("array");
+    writer.start(
+        "carray_list",
+        &[
+            attr("xs.n", "curveTypes"),
+            attr("count", points.len().saturating_sub(1)),
+        ],
+    );
     for point in points.iter().skip(1) {
         let curve_type = match point.kind {
             "LINEAR" => "LINEAR",
@@ -290,9 +619,38 @@ fn write_attr(
             "INVERSE_STEP" => "INVERSE_STEP",
             _ => "SMOOTH",
         };
-        writeln!(xml, "<CCurveType v=\"{}\" />", curve_type).unwrap();
+        writer.empty("CCurveType", &[attr("v", curve_type)]);
     }
-    xml.push_str("</carray_list><d xs.n=\"rangeMin\">-Infinity</d><d xs.n=\"rangeMax\">Infinity</d><b xs.n=\"isRepeat\">false</b></CMutableSequence></CMvAttrF>");
+    writer.end("carray_list");
+    writer.text("d", &[attr("xs.n", "rangeMin")], "-Infinity");
+    writer.text("d", &[attr("xs.n", "rangeMax")], "Infinity");
+    writer.text("b", &[attr("xs.n", "isRepeat")], false);
+    writer.end("CMutableSequence");
+    writer.end("CMvAttrF");
+}
+
+fn write_effect_header(xml: &mut XmlWriter<'_>, effect_id: &str, can_delete: bool, count: usize) {
+    xml.start("ICMvEffect", &[attr("xs.n", "super")]);
+    xml.empty("CEffectId", &[attr("xs.n", "id"), attr("idstr", effect_id)]);
+    xml.text("b", &[attr("xs.n", "isActive")], true);
+    xml.text("b", &[attr("xs.n", "canDelete")], can_delete);
+    xml.start(
+        "array",
+        &[
+            attr("xs.n", "attrList"),
+            attr("count", count),
+            attr("type", "ICMvAttr"),
+        ],
+    );
+}
+
+fn write_control_point(xml: &mut XmlWriter<'_>, name: &str, point: MotionPoint, fps: f32) {
+    xml.start("CBezierCtrlPt", &[attr("xs.n", name)]);
+    xml.text("f", &[attr("xs.n", "posF")], point.time);
+    xml.text("i", &[attr("xs.n", "pos")], frame(point, fps));
+    xml.text("d", &[attr("xs.n", "doubleValue")], point.value);
+    xml.text("b", &[attr("xs.n", "isPosOptimized")], false);
+    xml.end("CBezierCtrlPt");
 }
 
 fn curve_key(curve: &MotionCurve) -> String {
@@ -382,10 +740,20 @@ fn write_parts_effect(
         .iter()
         .filter(|curve| curve.target() == "PartOpacity")
         .collect::<Vec<_>>();
-    writeln!(xml, "<CMvEffect_Live2DPartsVisible xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"Effects:Live2DPartsOpacity\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, curves.len()).unwrap();
+    let mut writer = XmlWriter::new(xml);
+    writer.start(
+        "CMvEffect_Live2DPartsVisible",
+        &[attr("xs.id", ref_id(effect))],
+    );
+    write_effect_header(
+        &mut writer,
+        "Effects:Live2DPartsOpacity",
+        false,
+        curves.len(),
+    );
     for (index, curve) in curves.iter().enumerate() {
         write_attr(
-            xml,
+            &mut writer,
             effect * 10_000 + index as u32,
             track,
             curve,
@@ -394,13 +762,42 @@ fn write_parts_effect(
             fade_out_time,
         );
     }
-    xml.push_str("</array><hash_map xs.n=\"attrMap\" count=\"");
-    write!(xml, "{}\">", curves.len()).unwrap();
+    writer.end("array");
+    writer.start(
+        "hash_map",
+        &[
+            attr("xs.n", "attrMap"),
+            attr("count", curves.len()),
+            attr("keyType", "string"),
+        ],
+    );
     for (index, curve) in curves.iter().enumerate() {
         let id = effect * 10_000 + index as u32;
-        writeln!(xml, "<entry><CAttrId xs.n=\"key\" idstr=\"live2DPartsOpacity:{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", escape(curve.id()), id).unwrap();
+        writer.start("entry", &[]);
+        writer.empty(
+            "CAttrId",
+            &[
+                attr("xs.n", "key"),
+                attr("idstr", format!("live2DPartsOpacity:{}", curve.id())),
+            ],
+        );
+        writer.empty(
+            "CMvAttrF",
+            &[attr("xs.n", "value"), attr("xs.ref", ref_id(id))],
+        );
+        writer.end("entry");
     }
-    writeln!(xml, "</hash_map><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect><carray_list xs.n=\"effectParameterAttrIds\" count=\"0\" /></CMvEffect_Live2DPartsVisible>", track).unwrap();
+    writer.end("hash_map");
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(track))],
+    );
+    writer.end("ICMvEffect");
+    writer.empty(
+        "carray_list",
+        &[attr("xs.n", "effectParameterAttrIds"), attr("count", 0)],
+    );
+    writer.end("CMvEffect_Live2DPartsVisible");
 }
 
 fn write_visual_effect(
@@ -416,10 +813,12 @@ fn write_visual_effect(
         .iter()
         .find(|curve| curve.target() == "Model" && curve.id() == "Opacity");
     let count = usize::from(opacity.is_some());
-    writeln!(xml, "<CMvEffect_VisualDefault xs.id=\"#{}\"><ICMvEffect xs.n=\"super\"><CEffectId xs.n=\"id\" idstr=\"VisualDefault\" /><b xs.n=\"isActive\">true</b><b xs.n=\"canDelete\">false</b><array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">", effect, count).unwrap();
+    let mut writer = XmlWriter::new(xml);
+    writer.start("CMvEffect_VisualDefault", &[attr("xs.id", ref_id(effect))]);
+    write_effect_header(&mut writer, "VisualDefault", false, count);
     if let Some(curve) = opacity {
         write_attr(
-            xml,
+            &mut writer,
             effect * 10_000,
             track,
             curve,
@@ -428,18 +827,32 @@ fn write_visual_effect(
             fade_out_time,
         );
     }
-    writeln!(xml, "</array><hash_map xs.n=\"attrMap\" count=\"0\" keyType=\"string\" /><CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" /></ICMvEffect>", track).unwrap();
+    writer.end("array");
+    writer.empty(
+        "hash_map",
+        &[
+            attr("xs.n", "attrMap"),
+            attr("count", 0),
+            attr("keyType", "string"),
+        ],
+    );
+    writer.empty(
+        "CMvTrack_Live2DModel_Source",
+        &[attr("xs.n", "track"), attr("xs.ref", ref_id(track))],
+    );
+    writer.end("ICMvEffect");
     if opacity.is_some() {
-        writeln!(
-            xml,
-            "<CMvAttrF xs.n=\"attrOpacity\" xs.ref=\"#{}\" />",
-            effect * 10_000
-        )
-        .unwrap();
+        writer.empty(
+            "CMvAttrF",
+            &[
+                attr("xs.n", "attrOpacity"),
+                attr("xs.ref", ref_id(effect * 10_000)),
+            ],
+        );
     } else {
-        xml.push_str("<null xs.n=\"attrOpacity\" />\n");
+        writer.empty("null", &[attr("xs.n", "attrOpacity")]);
     }
-    xml.push_str("</CMvEffect_VisualDefault>\n");
+    writer.end("CMvEffect_VisualDefault");
 }
 
 fn write_special_effects(
@@ -471,25 +884,17 @@ fn write_special_effects(
         } else {
             "CMvEffect_LipSync"
         };
-        writeln!(xml, "<{} xs.id=\"#{}\">", kind, id).unwrap();
-        xml.push_str("<ICMvEffect xs.n=\"super\">\n");
-        writeln!(
-            xml,
-            "  <CEffectId xs.n=\"id\" idstr=\"Effects:{}\" />",
-            target
-        )
-        .unwrap();
-        xml.push_str("  <b xs.n=\"isActive\">true</b>\n");
-        xml.push_str("  <b xs.n=\"canDelete\">true</b>\n");
-        writeln!(
-            xml,
-            "  <array xs.n=\"attrList\" count=\"{}\" type=\"ICMvAttr\">",
-            usize::from(model_curve.is_some())
-        )
-        .unwrap();
+        let mut writer = XmlWriter::new(xml);
+        writer.start(kind, &[attr("xs.id", ref_id(id))]);
+        write_effect_header(
+            &mut writer,
+            &format!("Effects:{target}"),
+            true,
+            usize::from(model_curve.is_some()),
+        );
         if let Some(curve) = model_curve {
             write_attr(
-                xml,
+                &mut writer,
                 id * 10_000,
                 track,
                 curve,
@@ -498,40 +903,48 @@ fn write_special_effects(
                 fade_out_time,
             );
         }
-        xml.push_str("  </array>\n");
-        writeln!(
-            xml,
-            "  <hash_map xs.n=\"attrMap\" count=\"{}\" keyType=\"string\">",
-            usize::from(model_curve.is_some())
-        )
-        .unwrap();
+        writer.end("array");
+        writer.start(
+            "hash_map",
+            &[
+                attr("xs.n", "attrMap"),
+                attr("count", usize::from(model_curve.is_some())),
+                attr("keyType", "string"),
+            ],
+        );
         if let Some(curve) = model_curve {
-            writeln!(xml, "    <entry><CAttrId xs.n=\"key\" idstr=\"{}\" /><CMvAttrF xs.n=\"value\" xs.ref=\"#{}\" /></entry>", curve_key(curve), id * 10_000).unwrap();
+            writer.start("entry", &[]);
+            writer.empty(
+                "CAttrId",
+                &[attr("xs.n", "key"), attr("idstr", curve_key(curve))],
+            );
+            writer.empty(
+                "CMvAttrF",
+                &[attr("xs.n", "value"), attr("xs.ref", ref_id(id * 10_000))],
+            );
+            writer.end("entry");
         }
-        xml.push_str("  </hash_map>\n");
-        writeln!(
-            xml,
-            "  <CMvTrack_Live2DModel_Source xs.n=\"track\" xs.ref=\"#{}\" />",
-            track
-        )
-        .unwrap();
-        xml.push_str("</ICMvEffect>\n");
-        writeln!(
-            xml,
-            "<carray_list xs.n=\"effectParameterAttrIds\" count=\"{}\">",
-            ids.len()
-        )
-        .unwrap();
+        writer.end("hash_map");
+        writer.empty(
+            "CMvTrack_Live2DModel_Source",
+            &[attr("xs.n", "track"), attr("xs.ref", ref_id(track))],
+        );
+        writer.end("ICMvEffect");
+        writer.start(
+            "carray_list",
+            &[
+                attr("xs.n", "effectParameterAttrIds"),
+                attr("count", ids.len()),
+            ],
+        );
         for parameter in ids {
-            writeln!(
-                xml,
-                "<CAttrId idstr=\"live2dParam_{}\" />",
-                escape(parameter)
-            )
-            .unwrap();
+            writer.empty(
+                "CAttrId",
+                &[attr("idstr", format!("live2dParam_{parameter}"))],
+            );
         }
-        xml.push_str("</carray_list>\n");
-        writeln!(xml, "</{}>", kind).unwrap();
+        writer.end("carray_list");
+        writer.end(kind);
     }
 }
 
@@ -542,11 +955,40 @@ fn write_animation(
     scenes: &[(u32, u32)],
     manager: u32,
 ) {
-    writeln!(xml, "<CAnimation xs.id=\"#{}\"><s xs.n=\"name\">{}</s><file xs.n=\"file\" /><carray_list xs.n=\"_scenes\" count=\"{}\">", animation, escape(name), scenes.len()).unwrap();
+    let mut writer = XmlWriter::new(xml);
+    writer.start("CAnimation", &[attr("xs.id", ref_id(animation))]);
+    writer.text("s", &[attr("xs.n", "name")], name);
+    writer.empty("file", &[attr("xs.n", "file")]);
+    writer.start(
+        "carray_list",
+        &[attr("xs.n", "_scenes"), attr("count", scenes.len())],
+    );
     for (scene, _) in scenes {
-        writeln!(xml, "<CSceneSource xs.ref=\"#{}\" />", scene).unwrap();
+        writer.empty("CSceneSource", &[attr("xs.ref", ref_id(*scene))]);
     }
-    writeln!(xml, "</carray_list><CSceneSource xs.n=\"currentScene\" xs.ref=\"#{}\" /><CResourceManager xs.n=\"resourceManager\" xs.ref=\"#{}\" /><EditorEdition xs.n=\"editorEdition\"><i xs.n=\"edition\">15</i></EditorEdition><Animation xs.n=\"targetVersion\" v=\"FOR_SDK\" /></CAnimation>", scenes[0].0, manager).unwrap();
+    writer.end("carray_list");
+    writer.empty(
+        "CSceneSource",
+        &[
+            attr("xs.n", "currentScene"),
+            attr("xs.ref", ref_id(scenes[0].0)),
+        ],
+    );
+    writer.empty(
+        "CResourceManager",
+        &[
+            attr("xs.n", "resourceManager"),
+            attr("xs.ref", ref_id(manager)),
+        ],
+    );
+    writer.start("EditorEdition", &[attr("xs.n", "editorEdition")]);
+    writer.text("i", &[attr("xs.n", "edition")], 15);
+    writer.end("EditorEdition");
+    writer.empty(
+        "Animation",
+        &[attr("xs.n", "targetVersion"), attr("v", "FOR_SDK")],
+    );
+    writer.end("CAnimation");
 }
 
 fn write_resource_manager(
@@ -557,5 +999,40 @@ fn write_resource_manager(
     data: u32,
     model_path: &str,
 ) {
-    writeln!(xml, "<CResourceManager xs.id=\"#{}\"><CResourceGroup xs.n=\"rootGroup\"><CResourceGroupGuid xs.n=\"guid\" xs.ref=\"#{}\" /><carray_list xs.n=\"_childGuids\" count=\"1\"><CResourceGuid xs.ref=\"#{}\" /></carray_list><s xs.n=\"name\">Resources</s></CResourceGroup><carray_list xs.n=\"_resourceRefList\" count=\"1\"><CResourceData xs.ref=\"#{}\" /></carray_list><CResourceData xs.id=\"#{}\"><CResource_Linked_Model xs.n=\"resourceRef\"><ACResource_File xs.n=\"super\"><file xs.n=\"srcFile\">{}</file><CResourceGuid xs.n=\"guid\" xs.ref=\"#{}\" /><s xs.n=\"name\">{}</s></ACResource_File></CResource_Linked_Model></CResourceData></CResourceManager><CResourceGroupGuid xs.id=\"#{}\" /><CResourceGuid xs.id=\"#{}\" />", manager, group, resource, data, data, escape(model_path), resource, escape(model_path), group, resource).unwrap();
+    let mut writer = XmlWriter::new(xml);
+    writer.start("CResourceManager", &[attr("xs.id", ref_id(manager))]);
+    writer.start("CResourceGroup", &[attr("xs.n", "rootGroup")]);
+    writer.empty(
+        "CResourceGroupGuid",
+        &[attr("xs.n", "guid"), attr("xs.ref", ref_id(group))],
+    );
+    writer.start(
+        "carray_list",
+        &[attr("xs.n", "_childGuids"), attr("count", 1)],
+    );
+    writer.empty("CResourceGuid", &[attr("xs.ref", ref_id(resource))]);
+    writer.end("carray_list");
+    writer.text("s", &[attr("xs.n", "name")], "Resources");
+    writer.end("CResourceGroup");
+    writer.start(
+        "carray_list",
+        &[attr("xs.n", "_resourceRefList"), attr("count", 1)],
+    );
+    writer.empty("CResourceData", &[attr("xs.ref", ref_id(data))]);
+    writer.end("carray_list");
+    writer.start("CResourceData", &[attr("xs.id", ref_id(data))]);
+    writer.start("CResource_Linked_Model", &[attr("xs.n", "resourceRef")]);
+    writer.start("ACResource_File", &[attr("xs.n", "super")]);
+    writer.text("file", &[attr("xs.n", "srcFile")], model_path);
+    writer.empty(
+        "CResourceGuid",
+        &[attr("xs.n", "guid"), attr("xs.ref", ref_id(resource))],
+    );
+    writer.text("s", &[attr("xs.n", "name")], model_path);
+    writer.end("ACResource_File");
+    writer.end("CResource_Linked_Model");
+    writer.end("CResourceData");
+    writer.end("CResourceManager");
+    writer.empty("CResourceGroupGuid", &[attr("xs.id", ref_id(group))]);
+    writer.empty("CResourceGuid", &[attr("xs.id", ref_id(resource))]);
 }

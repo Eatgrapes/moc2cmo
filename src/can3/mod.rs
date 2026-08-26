@@ -2,6 +2,7 @@
 
 mod generator;
 mod project;
+mod xml;
 
-pub(crate) use generator::MotionInstance;
+pub use generator::MotionInstance;
 pub use project::Can3Project;
