@@ -1,4 +1,6 @@
-use super::types::{Model3Group, Model3References};
+use std::collections::BTreeMap;
+
+use super::types::{Model3Group, Model3HitArea, Model3References};
 use crate::{Error, Result};
 use serde::Deserialize;
 
@@ -10,6 +12,8 @@ pub struct Model3 {
     version: u32,
     file_references: Model3References,
     groups: Vec<Model3Group>,
+    hit_areas: Vec<Model3HitArea>,
+    layout: BTreeMap<String, f32>,
 }
 
 impl Model3 {
@@ -38,6 +42,8 @@ impl Model3 {
             version: raw.version,
             file_references: raw.file_references,
             groups: raw.groups,
+            hit_areas: raw.hit_areas,
+            layout: raw.layout,
         })
     }
     /// Returns the model manifest version.
@@ -52,6 +58,16 @@ impl Model3 {
     pub fn groups(&self) -> &[Model3Group] {
         &self.groups
     }
+
+    /// Returns named hit-test drawables.
+    pub fn hit_areas(&self) -> &[Model3HitArea] {
+        &self.hit_areas
+    }
+
+    /// Returns model placement values such as width, center, top, and bottom.
+    pub fn layout(&self) -> &BTreeMap<String, f32> {
+        &self.layout
+    }
 }
 
 #[derive(Deserialize)]
@@ -62,4 +78,8 @@ struct RawModel3 {
     file_references: Model3References,
     #[serde(rename = "Groups", default)]
     groups: Vec<Model3Group>,
+    #[serde(rename = "HitAreas", default)]
+    hit_areas: Vec<Model3HitArea>,
+    #[serde(rename = "Layout", default)]
+    layout: BTreeMap<String, f32>,
 }

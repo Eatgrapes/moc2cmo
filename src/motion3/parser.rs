@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::types::{MotionCurve, MotionMeta, MotionPoint, MotionSegment};
+use super::types::{MotionCurve, MotionMeta, MotionPoint, MotionSegment, MotionUserData};
 use crate::{Error, Result};
 
 const FORMAT: &str = "motion3.json";
@@ -11,6 +11,7 @@ pub struct Motion3 {
     version: u32,
     meta: MotionMeta,
     curves: Vec<MotionCurve>,
+    user_data: Vec<MotionUserData>,
 }
 
 impl Motion3 {
@@ -44,6 +45,7 @@ impl Motion3 {
             version: raw.version,
             meta: raw.meta,
             curves,
+            user_data: raw.user_data,
         })
     }
     /// Returns the motion format version.
@@ -58,6 +60,11 @@ impl Motion3 {
     pub fn curves(&self) -> &[MotionCurve] {
         &self.curves
     }
+
+    /// Returns timed user-data events.
+    pub fn user_data(&self) -> &[MotionUserData] {
+        &self.user_data
+    }
 }
 
 #[derive(Deserialize)]
@@ -68,6 +75,8 @@ struct RawMotion3 {
     meta: MotionMeta,
     #[serde(rename = "Curves", default)]
     curves: Vec<RawCurve>,
+    #[serde(rename = "UserData", default)]
+    user_data: Vec<MotionUserData>,
 }
 #[derive(Deserialize)]
 struct RawCurve {

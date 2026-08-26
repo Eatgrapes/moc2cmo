@@ -41,6 +41,17 @@ pub struct MotionPoint {
     pub value: f32,
 }
 
+/// A timed user-data event embedded in a motion.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct MotionUserData {
+    /// Event time in seconds.
+    #[serde(rename = "Time")]
+    pub time: f32,
+    /// Event payload.
+    #[serde(rename = "Value")]
+    pub value: String,
+}
+
 /// One animated target curve.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionCurve {

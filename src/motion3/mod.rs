@@ -4,4 +4,4 @@ mod parser;
 mod types;
 
 pub use parser::Motion3;
-pub use types::{MotionCurve, MotionMeta, MotionPoint, MotionSegment};
+pub use types::{MotionCurve, MotionMeta, MotionPoint, MotionSegment, MotionUserData};

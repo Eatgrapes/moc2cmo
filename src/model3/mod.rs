@@ -4,4 +4,4 @@ mod parser;
 mod types;
 
 pub use parser::Model3;
-pub use types::{Model3Expression, Model3Group, Model3Motion, Model3References};
+pub use types::{Model3Expression, Model3Group, Model3HitArea, Model3Motion, Model3References};

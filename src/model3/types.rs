@@ -68,3 +68,14 @@ pub struct Model3Group {
     #[serde(rename = "Ids", default)]
     pub ids: Vec<String>,
 }
+
+/// A named hit-test drawable from a model manifest.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Model3HitArea {
+    /// Drawable identifier.
+    #[serde(rename = "Id")]
+    pub id: String,
+    /// Human-readable hit-area name.
+    #[serde(rename = "Name")]
+    pub name: String,
+}
