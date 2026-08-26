@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use super::xml::{IMPORTS, XmlWriter, attr};
 use crate::{
-    Error, Result,
+    Result,
     model3::Model3Group,
     motion3::{Motion3, MotionCurve, MotionPoint, MotionSegment},
 };
@@ -14,9 +14,6 @@ pub(crate) fn generate(
     motions: &[MotionInstance],
     groups: &[Model3Group],
 ) -> Result<Vec<u8>> {
-    if motions.is_empty() {
-        return Err(Error::InvalidCan3("model has no motion files".into()));
-    }
     let mut xml = String::new();
     write_header(&mut xml);
     xml.push_str("<root fileFormatVersion=\"401000005\"><shared>");
@@ -1049,13 +1046,14 @@ fn write_animation(
         writer.empty("CSceneSource", &[attr("xs.ref", ref_id(*scene))]);
     }
     writer.end("carray_list");
-    writer.empty(
-        "CSceneSource",
-        &[
-            attr("xs.n", "currentScene"),
-            attr("xs.ref", ref_id(scenes[0].0)),
-        ],
-    );
+    if let Some((scene, _)) = scenes.first() {
+        writer.empty(
+            "CSceneSource",
+            &[attr("xs.n", "currentScene"), attr("xs.ref", ref_id(*scene))],
+        );
+    } else {
+        writer.empty("null", &[attr("xs.n", "currentScene")]);
+    }
     writer.empty(
         "CResourceManager",
         &[
