@@ -53,6 +53,9 @@ pub struct Model3Motion {
     /// Optional fade-out duration.
     #[serde(rename = "FadeOutTime", default)]
     pub fade_out_time: Option<f32>,
+    /// Optional relative path to a motion sound file.
+    #[serde(rename = "Sound", default)]
+    pub sound: Option<String>,
 }
 
 /// An automatic parameter group such as EyeBlink or LipSync.

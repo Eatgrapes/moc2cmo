@@ -11,6 +11,16 @@ pub struct MotionMeta {
     pub(crate) loop_motion: bool,
     #[serde(rename = "AreBeziersRestricted", default)]
     pub(crate) are_beziers_restricted: bool,
+    #[serde(rename = "CurveCount", default)]
+    pub(crate) curve_count: u32,
+    #[serde(rename = "TotalSegmentCount", default)]
+    pub(crate) total_segment_count: u32,
+    #[serde(rename = "TotalPointCount", default)]
+    pub(crate) total_point_count: u32,
+    #[serde(rename = "UserDataCount", default)]
+    pub(crate) user_data_count: u32,
+    #[serde(rename = "TotalUserDataSize", default)]
+    pub(crate) total_user_data_size: u32,
 }
 
 impl MotionMeta {
@@ -29,6 +39,26 @@ impl MotionMeta {
     /// Returns whether Bezier time coordinates use restricted semantics.
     pub fn are_beziers_restricted(&self) -> bool {
         self.are_beziers_restricted
+    }
+    /// Returns the curve count reported by the file.
+    pub fn curve_count(&self) -> u32 {
+        self.curve_count
+    }
+    /// Returns the total segment count reported by the file.
+    pub fn total_segment_count(&self) -> u32 {
+        self.total_segment_count
+    }
+    /// Returns the total point count reported by the file.
+    pub fn total_point_count(&self) -> u32 {
+        self.total_point_count
+    }
+    /// Returns the user-data event count reported by the file.
+    pub fn user_data_count(&self) -> u32 {
+        self.user_data_count
+    }
+    /// Returns the user-data byte size reported by the file.
+    pub fn total_user_data_size(&self) -> u32 {
+        self.total_user_data_size
     }
 }
 
