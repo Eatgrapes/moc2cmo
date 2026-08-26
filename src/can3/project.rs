@@ -36,6 +36,7 @@ impl Can3Project {
     ) -> Result<Self> {
         let main_xml = generator::generate(animation_name, model_path, motions, groups)?;
         validate_xml(&main_xml)?;
+        validate_references(&main_xml)?;
         Ok(Self {
             main_xml,
             resources: Vec::new(),
@@ -100,6 +101,7 @@ impl Can3Project {
         std::str::from_utf8(&main_xml)
             .map_err(|_| Error::InvalidCan3("main.xml is not UTF-8".into()))?;
         validate_xml(&main_xml)?;
+        validate_references(&main_xml)?;
         Ok(Self {
             main_xml,
             resources,
@@ -236,6 +238,49 @@ fn validate_xml(bytes: &[u8]) -> Result<()> {
             }
         }
     }
+}
+
+fn validate_references(bytes: &[u8]) -> Result<()> {
+    use std::collections::HashSet;
+    let mut reader = quick_xml::Reader::from_reader(bytes);
+    let mut buffer = Vec::new();
+    let mut ids = HashSet::new();
+    let mut refs = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(quick_xml::events::Event::Start(event))
+            | Ok(quick_xml::events::Event::Empty(event)) => {
+                for attribute in event.attributes().with_checks(false) {
+                    let attribute = attribute.map_err(|error| {
+                        Error::InvalidCan3(format!("invalid XML attribute: {error}"))
+                    })?;
+                    let key = attribute.key.as_ref();
+                    let value = attribute.unescape_value().map_err(|error| {
+                        Error::InvalidCan3(format!("invalid XML attribute value: {error}"))
+                    })?;
+                    if key == b"xs.id" {
+                        ids.insert(value.into_owned());
+                    } else if key == b"xs.ref" && value.starts_with('#') {
+                        refs.push(value.into_owned());
+                    }
+                }
+                buffer.clear();
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(_) => buffer.clear(),
+            Err(error) => {
+                return Err(Error::InvalidCan3(format!(
+                    "main.xml is not well-formed: {error}"
+                )));
+            }
+        }
+    }
+    if let Some(missing) = refs.into_iter().find(|reference| !ids.contains(reference)) {
+        return Err(Error::InvalidCan3(format!(
+            "main.xml references missing object {missing}"
+        )));
+    }
+    Ok(())
 }
 
 fn replace_text_element(block: &str, tag: &str, name: &str, value: &str) -> Result<String> {

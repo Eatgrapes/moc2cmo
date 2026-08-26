@@ -51,6 +51,7 @@ impl Motion3 {
             .into_iter()
             .map(parse_curve)
             .collect::<Result<Vec<_>>>()?;
+        validate_metadata(&raw.meta, &curves, raw.user_data.len())?;
         Ok(Self {
             version: raw.version,
             meta: raw.meta,
@@ -75,6 +76,36 @@ impl Motion3 {
     pub fn user_data(&self) -> &[MotionUserData] {
         &self.user_data
     }
+}
+
+fn validate_metadata(
+    meta: &MotionMeta,
+    curves: &[MotionCurve],
+    user_data_count: usize,
+) -> Result<()> {
+    let segment_count = curves
+        .iter()
+        .map(|curve| curve.segments().len())
+        .sum::<usize>();
+    let point_count = curves
+        .iter()
+        .map(|curve| curve.segments().len() + 1)
+        .sum::<usize>();
+    if meta.curve_count != 0 && meta.curve_count as usize != curves.len() {
+        return Err(invalid("Meta.CurveCount does not match Curves"));
+    }
+    if meta.total_segment_count != 0 && meta.total_segment_count as usize != segment_count {
+        return Err(invalid(
+            "Meta.TotalSegmentCount does not match parsed segments",
+        ));
+    }
+    if meta.total_point_count != 0 && meta.total_point_count as usize != point_count {
+        return Err(invalid("Meta.TotalPointCount does not match parsed points"));
+    }
+    if meta.user_data_count != 0 && meta.user_data_count as usize != user_data_count {
+        return Err(invalid("Meta.UserDataCount does not match UserData"));
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]
